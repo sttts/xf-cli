@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -17,6 +19,9 @@ type Client struct {
 	httpClient *http.Client
 	verbose    bool
 	logWriter  io.Writer
+	mu         sync.Mutex
+	nextReqAt  time.Time
+	interval   time.Duration
 }
 
 type SessionInfo struct {
@@ -36,6 +41,7 @@ func NewClient(baseURL string, verbose bool) (*Client, error) {
 		baseURL:   strings.TrimRight(baseURL, "/"),
 		verbose:   verbose,
 		logWriter: os.Stderr,
+		interval:  200 * time.Millisecond,
 	}
 
 	client.httpClient = &http.Client{
@@ -50,6 +56,20 @@ func NewClient(baseURL string, verbose bool) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+func (c *Client) waitTurn() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	if wait := time.Until(c.nextReqAt); wait > 0 {
+		c.logf("Rate limit sleep: %s", wait.Truncate(time.Millisecond))
+		time.Sleep(wait)
+		now = time.Now()
+	}
+
+	c.nextReqAt = now.Add(c.interval)
 }
 
 func (c *Client) BaseURL() string {
@@ -178,6 +198,7 @@ func (c *Client) newRequest(method, requestURL string, body io.Reader) (*http.Re
 
 func (c *Client) FetchPage(requestURL string) ([]byte, error) {
 	c.logRequest("GET", requestURL, nil)
+	c.waitTurn()
 
 	req, err := c.newRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -202,6 +223,7 @@ func (c *Client) FetchPage(requestURL string) ([]byte, error) {
 
 func (c *Client) PostForm(requestURL string, form url.Values, referer string) ([]byte, error) {
 	c.logRequest("POST", requestURL, form)
+	c.waitTurn()
 
 	req, err := c.newRequest(http.MethodPost, requestURL, strings.NewReader(form.Encode()))
 	if err != nil {
