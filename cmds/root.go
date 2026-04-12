@@ -37,11 +37,12 @@ type CLI struct {
 }
 
 type App struct {
-	baseURL  string
-	username string
-	password string
-	verbose  int
-	asJSON   bool
+	baseURL     string
+	username    string
+	password    string
+	verbose     int
+	asJSON      bool
+	sessionPath string
 }
 
 func Execute() error {
@@ -66,6 +67,9 @@ func Execute() error {
 		password: cli.Password,
 		verbose:  cli.Verbose,
 		asJSON:   cli.AsJSON,
+	}
+	if sessionPath, err := auth.DefaultSessionPath(); err == nil {
+		app.sessionPath = sessionPath
 	}
 
 	if err := ctx.Run(app); err != nil {
@@ -134,18 +138,31 @@ func (a *App) ensureCredentials() error {
 }
 
 func (a *App) login() (*auth.Client, auth.SessionInfo, error) {
-	if err := a.ensureCredentials(); err != nil {
+	client, err := auth.NewClient(a.baseURL, a.verbose)
+	if err != nil {
 		return nil, auth.SessionInfo{}, err
 	}
 
-	client, err := auth.NewClient(a.baseURL, a.verbose)
-	if err != nil {
+	if a.sessionPath != "" {
+		if stored, err := auth.LoadSession(a.sessionPath); err == nil && stored.BaseURL == a.baseURL {
+			session, err := client.VerifySession(stored)
+			if err == nil {
+				_ = auth.SaveSession(a.sessionPath, session)
+				return client, session, nil
+			}
+		}
+	}
+
+	if err := a.ensureCredentials(); err != nil {
 		return nil, auth.SessionInfo{}, err
 	}
 
 	session, err := client.Login(a.username, a.password)
 	if err != nil {
 		return nil, auth.SessionInfo{}, err
+	}
+	if a.sessionPath != "" {
+		_ = auth.SaveSession(a.sessionPath, session)
 	}
 
 	return client, session, nil

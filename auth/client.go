@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +31,11 @@ type SessionInfo struct {
 	Cookies  map[string]string `json:"cookies"`
 	XFToken  string            `json:"xf_token"`
 	BaseURL  string            `json:"base_url"`
+}
+
+type StoredSession struct {
+	SessionInfo
+	SavedAt time.Time `json:"saved_at"`
 }
 
 func NewClient(baseURL string, verbose int) (*Client, error) {
@@ -321,4 +328,99 @@ func (c *Client) Cookies() map[string]string {
 	}
 
 	return cookies
+}
+
+func (c *Client) SetCookies(cookies map[string]string) error {
+	base, err := url.Parse(c.baseURL)
+	if err != nil {
+		return fmt.Errorf("parsing base URL: %w", err)
+	}
+
+	jarCookies := make([]*http.Cookie, 0, len(cookies))
+	for key, value := range cookies {
+		jarCookies = append(jarCookies, &http.Cookie{
+			Name:   key,
+			Value:  value,
+			Path:   "/",
+			Domain: base.Hostname(),
+		})
+	}
+
+	c.httpClient.Jar.SetCookies(base, jarCookies)
+	return nil
+}
+
+func DefaultSessionPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("determining user config dir: %w", err)
+	}
+
+	return filepath.Join(configDir, "xf-cli", "session.json"), nil
+}
+
+func SaveSession(path string, session SessionInfo) error {
+	stored := StoredSession{
+		SessionInfo: session,
+		SavedAt:     time.Now().UTC(),
+	}
+
+	data, err := json.MarshalIndent(stored, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling session: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("creating session dir: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("writing session file: %w", err)
+	}
+
+	return nil
+}
+
+func LoadSession(path string) (SessionInfo, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SessionInfo{}, fmt.Errorf("reading session file: %w", err)
+	}
+
+	var stored StoredSession
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return SessionInfo{}, fmt.Errorf("parsing session file: %w", err)
+	}
+
+	return stored.SessionInfo, nil
+}
+
+func (c *Client) ApplySession(session SessionInfo) error {
+	if err := c.SetCookies(session.Cookies); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) VerifySession(session SessionInfo) (SessionInfo, error) {
+	if err := c.ApplySession(session); err != nil {
+		return SessionInfo{}, err
+	}
+
+	body, err := c.FetchPage(c.baseURL + "/")
+	if err != nil {
+		return SessionInfo{}, fmt.Errorf("fetching main page: %w", err)
+	}
+
+	if !IsLoggedIn(body) {
+		return SessionInfo{}, fmt.Errorf("saved session is not logged in")
+	}
+
+	fresh := session
+	fresh.Cookies = c.Cookies()
+	if token, err := ExtractCSRFToken(body); err == nil {
+		fresh.XFToken = token
+	}
+
+	return fresh, nil
 }

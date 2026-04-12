@@ -32,7 +32,8 @@ func (c Config) Validate() error {
 }
 
 type SessionProvider struct {
-	config Config
+	config      Config
+	sessionPath string
 
 	mu      sync.Mutex
 	client  *auth.Client
@@ -45,7 +46,12 @@ func NewSessionProvider(config Config) (*SessionProvider, error) {
 		return nil, err
 	}
 
-	return &SessionProvider{config: config}, nil
+	sessionPath, err := auth.DefaultSessionPath()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SessionProvider{config: config, sessionPath: sessionPath}, nil
 }
 
 func (p *SessionProvider) Login() (*auth.Client, auth.SessionInfo, error) {
@@ -61,12 +67,23 @@ func (p *SessionProvider) Login() (*auth.Client, auth.SessionInfo, error) {
 	}
 
 	if !p.ready {
+		if stored, err := auth.LoadSession(p.sessionPath); err == nil && stored.BaseURL == p.config.BaseURL {
+			session, err := p.client.VerifySession(stored)
+			if err == nil {
+				p.session = session
+				p.ready = true
+				_ = auth.SaveSession(p.sessionPath, session)
+				return p.client, p.session, nil
+			}
+		}
+
 		session, err := p.client.Login(p.config.Username, p.config.Password)
 		if err != nil {
 			return nil, auth.SessionInfo{}, err
 		}
 		p.session = session
 		p.ready = true
+		_ = auth.SaveSession(p.sessionPath, session)
 	}
 
 	return p.client, p.session, nil

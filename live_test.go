@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,6 +49,40 @@ func TestLiveLogin(t *testing.T) {
 	}
 	if len(session.Cookies) == 0 {
 		t.Fatal("expected cookies in session")
+	}
+}
+
+func TestLiveSessionRoundTrip(t *testing.T) {
+	_, session := newLiveSession(t)
+	path := filepath.Join(t.TempDir(), "session.json")
+
+	if err := auth.SaveSession(path, session); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	loaded, err := auth.LoadSession(path)
+	if err != nil {
+		t.Fatalf("load session: %v", err)
+	}
+
+	reusedClient, err := auth.NewClient("https://www.rc-network.de", 0)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	verified, err := reusedClient.VerifySession(loaded)
+	if err != nil {
+		t.Fatalf("verify session: %v", err)
+	}
+
+	if verified.Username != session.Username {
+		t.Fatalf("expected username %q, got %q", session.Username, verified.Username)
+	}
+	if verified.XFToken == "" {
+		t.Fatal("expected refreshed xf token")
+	}
+	if len(verified.Cookies) == 0 {
+		t.Fatal("expected cookies after verification")
 	}
 }
 
