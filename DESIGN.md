@@ -32,10 +32,10 @@ This means the project direction is confirmed:
 
 For the first implementation phase:
 
+- read-only server
 - no admin-only functionality
 - no API-key-based XenForo integration
 - no private-message support
-- no write actions except maybe later `post_reply`
 - no automatic loading of `.env`
 - no hidden in-memory task tracking
 
@@ -285,24 +285,16 @@ Notes:
 - this should map to XenForo’s public “threads with your posts” or equivalent frontend views when available
 - if the forum has no dedicated public view, the implementation may fall back to public user activity pages plus normalization
 
-## Later Tool
-
-### `post_reply`
-
-Purpose:
-- reply to a thread as the authenticated user
-
-Constraints:
-- must require an explicit confirmation prompt at tool level
-- must use fresh `_xfToken`
-- must verify success by reading the resulting page
-
-This should come after the read-path tools are stable.
-
 Private messages are explicitly out of scope:
 - no reading conversations
 - no listing conversations
 - no sending private messages
+
+Posting is explicitly out of scope:
+- no creating threads
+- no replying to threads
+- no editing posts
+- no deleting posts
 
 ## Architecture
 
@@ -585,7 +577,6 @@ Recommended fixture set:
 6. Implement `follow_link`
 7. Implement `get_image`
 8. Add session persistence
-9. Add write-path tooling such as `post_reply`
 
 ## Summary
 
@@ -602,3 +593,4 @@ The next correct move is:
 - refactor into packages
 - preserve the already validated behavior
 - surface the validated read-paths as MCP tools
+- keep the server strictly read-only
