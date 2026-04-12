@@ -34,6 +34,7 @@ For the first implementation phase:
 
 - no admin-only functionality
 - no API-key-based XenForo integration
+- no private-message support
 - no write actions except maybe later `post_reply`
 - no automatic loading of `.env`
 - no hidden in-memory task tracking
@@ -198,6 +199,92 @@ Notes:
 - `read_thread` should return image references inline
 - `get_image` is the dedicated resolver for image-oriented downstream clients
 
+### `read_profile`
+
+Purpose:
+- read a public member profile
+
+Input:
+- `user_url`
+
+Output:
+- canonical user URL
+- display name
+- profile headline or title if present
+- profile fields that are publicly visible
+- links to public activity views when available
+
+Notes:
+- only public profile data is in scope
+
+### `list_user_posts`
+
+Purpose:
+- enumerate a user’s public forum posts
+
+Input:
+- `user_url`
+- optional `page`
+
+Output:
+- canonical user URL
+- current page
+- public post summaries
+- next-page URL if available
+
+Each post summary should include:
+- post URL
+- parent thread URL
+- parent thread title
+- posted-at timestamp string
+- snippet
+
+### `list_user_threads`
+
+Purpose:
+- enumerate public threads started by a user
+
+Input:
+- `user_url`
+- optional `page`
+
+Output:
+- canonical user URL
+- current page
+- thread summaries
+- next-page URL if available
+
+### `list_my_threads`
+
+Purpose:
+- list threads started by the authenticated user
+
+Input:
+- optional `page`
+
+Output:
+- thread summaries
+- next-page URL if available
+
+Notes:
+- this is a convenience wrapper around the authenticated user’s public content
+
+### `list_threads_i_participated`
+
+Purpose:
+- list threads where the authenticated user has posted
+
+Input:
+- optional `page`
+
+Output:
+- thread summaries
+- next-page URL if available
+
+Notes:
+- this should map to XenForo’s public “threads with your posts” or equivalent frontend views when available
+- if the forum has no dedicated public view, the implementation may fall back to public user activity pages plus normalization
+
 ## Later Tool
 
 ### `post_reply`
@@ -211,6 +298,11 @@ Constraints:
 - must verify success by reading the resulting page
 
 This should come after the read-path tools are stable.
+
+Private messages are explicitly out of scope:
+- no reading conversations
+- no listing conversations
+- no sending private messages
 
 ## Architecture
 
@@ -275,6 +367,7 @@ Responsible for:
 - pagination traversal
 - canonical URL normalization
 - image extraction
+- public member activity extraction
 
 This layer should not know anything about MCP.
 
@@ -343,6 +436,12 @@ This logic should live in one place, not inside every tool.
 - return one page at a time
 - expose `next_page_url`
 - callers decide whether to continue
+
+### User activity
+
+- return one page at a time
+- expose `next_page_url`
+- normalize threads and post links back into canonical forum objects
 
 ### Threads
 
@@ -472,6 +571,9 @@ Recommended fixture set:
 - thread page with multiple images
 - search page
 - search result page
+- public member profile page
+- public member posts page
+- public member threads page
 
 ## Implementation Order After This Design
 
@@ -479,10 +581,11 @@ Recommended fixture set:
 2. Extract scraper parsers into `scraper/`
 3. Add fixture-based tests for parsing and normalization
 4. Introduce MCP stdio server and register tools
-5. Implement `follow_link`
-6. Implement `get_image`
-7. Add session persistence
-8. Add write-path tooling such as `post_reply`
+5. Implement public user-profile and user-activity tools
+6. Implement `follow_link`
+7. Implement `get_image`
+8. Add session persistence
+9. Add write-path tooling such as `post_reply`
 
 ## Summary
 
