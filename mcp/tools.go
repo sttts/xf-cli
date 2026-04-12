@@ -13,7 +13,8 @@ type EmptyArgs struct{}
 
 type ListThreadsArgs struct {
 	ForumURL string `json:"forum_url" jsonschema:"Forum URL or forum path"`
-	Page     int    `json:"page,omitempty" jsonschema:"Page number"`
+	Page     string `json:"page,omitempty" jsonschema:"Page cursor returned by a previous call"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"Minimum number of results to collect; 0 means all pages"`
 }
 
 type ReadThreadArgs struct {
@@ -21,17 +22,20 @@ type ReadThreadArgs struct {
 }
 
 type PageArgs struct {
-	Page int `json:"page,omitempty" jsonschema:"Page number"`
+	Page  string `json:"page,omitempty" jsonschema:"Page cursor returned by a previous call"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Minimum number of results to collect; 0 means all pages"`
 }
 
 type SearchArgs struct {
 	Query string `json:"query" jsonschema:"Forum search query"`
-	Page  int    `json:"page,omitempty" jsonschema:"Page number"`
+	Page  string `json:"page,omitempty" jsonschema:"Page cursor returned by a previous call"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Minimum number of results to collect; 0 means all pages"`
 }
 
 type ProfileArgs struct {
 	ProfileURL string `json:"profile_url" jsonschema:"Profile URL or member path"`
-	Page       int    `json:"page,omitempty" jsonschema:"Page number"`
+	Page       string `json:"page,omitempty" jsonschema:"Page cursor returned by a previous call"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"Minimum number of results to collect; 0 means all pages"`
 }
 
 type FollowLinkArgs struct {
@@ -67,7 +71,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args ListThreadsArgs) (scraper.ThreadListResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.ThreadListResult, error) {
-					return scraper.ListThreads(client, session, args.ForumURL, defaultPage(args.Page))
+					return scraper.ListThreads(client, session, args.ForumURL, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -93,7 +97,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args SearchArgs) (scraper.SearchResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.SearchResult, error) {
-					return scraper.SearchThreads(client, session, args.Query, defaultPage(args.Page))
+					return scraper.SearchThreads(client, session, args.Query, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -106,7 +110,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args SearchArgs) (scraper.SearchResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.SearchResult, error) {
-					return scraper.SearchPosts(client, session, args.Query, defaultPage(args.Page))
+					return scraper.SearchPosts(client, session, args.Query, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -132,7 +136,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args ProfileArgs) (scraper.UserPostsResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.UserPostsResult, error) {
-					return scraper.ListUserPosts(client, session, args.ProfileURL, defaultPage(args.Page))
+					return scraper.ListUserPosts(client, session, args.ProfileURL, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -145,7 +149,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args ProfileArgs) (scraper.UserThreadsResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.UserThreadsResult, error) {
-					return scraper.ListUserThreads(client, session, args.ProfileURL, defaultPage(args.Page))
+					return scraper.ListUserThreads(client, session, args.ProfileURL, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -158,7 +162,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args PageArgs) (scraper.ThreadListResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.ThreadListResult, error) {
-					return scraper.ListMyThreads(client, session, defaultPage(args.Page))
+					return scraper.ListMyThreads(client, session, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -171,7 +175,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			),
 			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args PageArgs) (scraper.ThreadListResult, error) {
 				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.ThreadListResult, error) {
-					return scraper.ListThreadsIParticipated(client, session, defaultPage(args.Page))
+					return scraper.ListThreadsIParticipated(client, session, args.Page, args.Limit)
 				})
 			}),
 		},
@@ -202,13 +206,6 @@ func Tools(config Config) ([]server.ServerTool, error) {
 			}),
 		},
 	}, nil
-}
-
-func defaultPage(page int) int {
-	if page <= 0 {
-		return 1
-	}
-	return page
 }
 
 func withSession[T any](provider *SessionProvider, fn func(client *auth.Client, session auth.SessionInfo) (T, error)) (T, error) {

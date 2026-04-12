@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
-	xfmcp "github.com/sttts/xf-cli/mcp"
 	"github.com/sttts/xf-cli/auth"
+	xfmcp "github.com/sttts/xf-cli/mcp"
 	"golang.org/x/term"
 )
 
@@ -17,30 +17,30 @@ type CLI struct {
 	BaseURL  string `name:"base-url" default:"https://www.rc-network.de" help:"Forum base URL."`
 	Username string `short:"u" help:"Forum username or email."`
 	Password string `short:"p" help:"Forum password. Omit for secure prompt or XF_PASSWORD."`
-	Verbose  bool   `short:"v" help:"Verbose logging of HTTP request/response."`
+	Verbose  int    `short:"v" type:"counter" help:"Increase HTTP debug logging. -v=requests, -vv=headers/status, -vvv=bodies."`
 	AsJSON   bool   `name:"json" help:"Output command result as JSON."`
 
-	Login       LoginCmd       `cmd:"" name:"login" help:"Perform login and print session info."`
-	ListForums  ListForumsCmd  `cmd:"" name:"list_forums" help:"List forum categories and forums."`
-	ListThreads ListThreadsCmd `cmd:"" name:"list_threads" help:"List threads for a forum."`
-	ReadThread  ReadThreadCmd  `cmd:"" name:"read_thread" help:"Read a full thread across all pages."`
-	SearchThreads SearchThreadsCmd `cmd:"" name:"search_threads" help:"Search thread titles."`
-	SearchPosts SearchPostsCmd `cmd:"" name:"search_posts" help:"Search post contents."`
-	ReadProfile ReadProfileCmd `cmd:"" name:"read_profile" help:"Read a public user profile."`
-	ListUserPosts ListUserPostsCmd `cmd:"" name:"list_user_posts" help:"List a user's public posts."`
-	ListUserThreads ListUserThreadsCmd `cmd:"" name:"list_user_threads" help:"List threads started by a user."`
-	ListMyThreads ListMyThreadsCmd `cmd:"" name:"list_my_threads" help:"List threads started by the authenticated user."`
+	Login                    LoginCmd                    `cmd:"" name:"login" help:"Perform login and print session info."`
+	ListForums               ListForumsCmd               `cmd:"" name:"list_forums" help:"List forum categories and forums."`
+	ListThreads              ListThreadsCmd              `cmd:"" name:"list_threads" help:"List threads for a forum."`
+	ReadThread               ReadThreadCmd               `cmd:"" name:"read_thread" help:"Read a full thread across all pages."`
+	SearchThreads            SearchThreadsCmd            `cmd:"" name:"search_threads" help:"Search thread titles."`
+	SearchPosts              SearchPostsCmd              `cmd:"" name:"search_posts" help:"Search post contents."`
+	ReadProfile              ReadProfileCmd              `cmd:"" name:"read_profile" help:"Read a public user profile."`
+	ListUserPosts            ListUserPostsCmd            `cmd:"" name:"list_user_posts" help:"List a user's public posts."`
+	ListUserThreads          ListUserThreadsCmd          `cmd:"" name:"list_user_threads" help:"List threads started by a user."`
+	ListMyThreads            ListMyThreadsCmd            `cmd:"" name:"list_my_threads" help:"List threads started by the authenticated user."`
 	ListThreadsIParticipated ListThreadsIParticipatedCmd `cmd:"" name:"list_threads_i_participated" help:"List threads with posts by the authenticated user."`
-	FollowLink FollowLinkCmd `cmd:"" name:"follow_link" help:"Resolve and normalize an internal forum link."`
-	GetImage GetImageCmd `cmd:"" name:"get_image" help:"Resolve image and attachment URLs."`
-	MCP MCPCommand `cmd:"" name:"mcp" help:"Run the MCP server over stdin/stdout."`
+	FollowLink               FollowLinkCmd               `cmd:"" name:"follow_link" help:"Resolve and normalize an internal forum link."`
+	GetImage                 GetImageCmd                 `cmd:"" name:"get_image" help:"Resolve image and attachment URLs."`
+	MCP                      MCPCommand                  `cmd:"" name:"mcp" help:"Run the MCP server over stdin/stdout."`
 }
 
 type App struct {
 	baseURL  string
 	username string
 	password string
-	verbose  bool
+	verbose  int
 	asJSON   bool
 }
 

@@ -17,7 +17,7 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	verbose    bool
+	verbose    int
 	logWriter  io.Writer
 	mu         sync.Mutex
 	nextReqAt  time.Time
@@ -31,7 +31,7 @@ type SessionInfo struct {
 	BaseURL  string            `json:"base_url"`
 }
 
-func NewClient(baseURL string, verbose bool) (*Client, error) {
+func NewClient(baseURL string, verbose int) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating cookie jar: %w", err)
@@ -77,14 +77,20 @@ func (c *Client) BaseURL() string {
 }
 
 func (c *Client) logf(format string, args ...any) {
-	if c.verbose {
+	if c.verbose > 0 {
+		fmt.Fprintf(c.logWriter, "[debug] "+format+"\n", args...)
+	}
+}
+
+func (c *Client) logfAt(level int, format string, args ...any) {
+	if c.verbose >= level {
 		fmt.Fprintf(c.logWriter, "[debug] "+format+"\n", args...)
 	}
 }
 
 func (c *Client) logRequest(method, requestURL string, form url.Values) {
-	c.logf("%s %s", method, requestURL)
-	if form == nil {
+	c.logfAt(1, "%s %s", method, requestURL)
+	if form == nil || c.verbose < 2 {
 		return
 	}
 
@@ -96,7 +102,7 @@ func (c *Client) logRequest(method, requestURL string, form url.Values) {
 		}
 		safe[key] = values
 	}
-	c.logf("Form: %s", safe.Encode())
+	c.logfAt(2, "Form: %s", safe.Encode())
 }
 
 func truncate(text string, limit int) string {
@@ -107,14 +113,20 @@ func truncate(text string, limit int) string {
 }
 
 func (c *Client) logResponse(resp *http.Response, body []byte) {
-	c.logf("Status: %s", resp.Status)
-	for key, values := range resp.Header {
-		c.logf("  %s: %s", key, strings.Join(values, ", "))
+	if c.verbose < 2 {
+		return
 	}
-	c.logf("Body (%d bytes): %s", len(body), truncate(string(body), 2000))
-	c.logf("Cookies:")
+
+	c.logfAt(2, "Status: %s", resp.Status)
+	for key, values := range resp.Header {
+		c.logfAt(2, "  %s: %s", key, strings.Join(values, ", "))
+	}
+	if c.verbose >= 3 {
+		c.logfAt(3, "Body (%d bytes): %s", len(body), truncate(string(body), 2000))
+	}
+	c.logfAt(2, "Cookies:")
 	for _, cookie := range resp.Cookies() {
-		c.logf("  %s=%s (path=%s)", cookie.Name, truncate(cookie.Value, 30), cookie.Path)
+		c.logfAt(2, "  %s=%s (path=%s)", cookie.Name, truncate(cookie.Value, 30), cookie.Path)
 	}
 }
 

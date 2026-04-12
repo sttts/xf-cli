@@ -8,7 +8,8 @@ import (
 
 type ListThreadsCmd struct {
 	ForumURL string `arg:"" required:"" help:"Forum URL or forum path."`
-	Page     int    `default:"1" help:"Page number."`
+	Page     string `help:"Page cursor returned by a previous call."`
+	Limit    int    `default:"100" help:"Minimum number of threads to collect; 0 means all pages."`
 }
 
 func (cmd *ListThreadsCmd) Run(app *App) error {
@@ -17,7 +18,7 @@ func (cmd *ListThreadsCmd) Run(app *App) error {
 		return err
 	}
 
-	result, err := scraper.ListThreads(client, session, cmd.ForumURL, cmd.Page)
+	result, err := scraper.ListThreads(client, session, cmd.ForumURL, cmd.Page, cmd.Limit)
 	if err != nil {
 		return err
 	}
@@ -28,7 +29,7 @@ func (cmd *ListThreadsCmd) Run(app *App) error {
 
 	fmt.Printf("Logged in as: %s\n", result.Username)
 	fmt.Printf("Forum: %s\n", result.ForumTitle)
-	fmt.Printf("Threads on page %d: %d\n", result.Page, len(result.Threads))
+	fmt.Printf("Threads from page %d: %d\n", result.Page, len(result.Threads))
 	for _, thread := range result.Threads {
 		fmt.Printf("\n- %s\n", thread.Title)
 		fmt.Printf("  %s\n", thread.URL)
@@ -36,8 +37,11 @@ func (cmd *ListThreadsCmd) Run(app *App) error {
 			fmt.Printf("  by %s\n", thread.Author)
 		}
 	}
+	if result.NextPage != "" {
+		fmt.Printf("\nNext page cursor: %s\n", result.NextPage)
+	}
 	if result.NextPageURL != "" {
-		fmt.Printf("\nNext page: %s\n", result.NextPageURL)
+		fmt.Printf("Next page URL: %s\n", result.NextPageURL)
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package scraper
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -44,7 +45,10 @@ type ThreadListResult struct {
 	ForumTitle  string          `json:"forum_title"`
 	ForumURL    string          `json:"forum_url"`
 	Page        int             `json:"page"`
+	Limit       int             `json:"limit,omitempty"`
+	PagesRead   int             `json:"pages_read,omitempty"`
 	Threads     []ThreadSummary `json:"threads"`
+	NextPage    string          `json:"next_page,omitempty"`
 	NextPageURL string          `json:"next_page_url,omitempty"`
 }
 
@@ -85,7 +89,10 @@ type SearchResult struct {
 	SearchType  string             `json:"search_type"`
 	Query       string             `json:"query"`
 	Page        int                `json:"page"`
+	Limit       int                `json:"limit,omitempty"`
+	PagesRead   int                `json:"pages_read,omitempty"`
 	Results     []SearchResultItem `json:"results"`
+	NextPage    string             `json:"next_page,omitempty"`
 	NextPageURL string             `json:"next_page_url,omitempty"`
 }
 
@@ -114,7 +121,24 @@ func ListForums(client *auth.Client, session auth.SessionInfo) (ForumListResult,
 	}, nil
 }
 
-func ListThreads(client *auth.Client, session auth.SessionInfo, forumRef string, page int) (ThreadListResult, error) {
+func ListThreads(client *auth.Client, session auth.SessionInfo, forumRef string, cursor string, limit int) (ThreadListResult, error) {
+	startPage, err := parsePageCursor(cursor)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+	limit = normalizeLimit(limit)
+
+	result, err := collectThreadPages(client, forumRef, startPage, limit)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+
+	result.Username = session.Username
+	result.BaseURL = session.BaseURL
+	return result, nil
+}
+
+func listThreadsPage(client *auth.Client, forumRef string, page int) (ThreadListResult, error) {
 	page = normalizePage(page)
 	forumRef = forumURL(client, forumRef, page)
 
@@ -128,8 +152,6 @@ func ListThreads(client *auth.Client, session auth.SessionInfo, forumRef string,
 		return ThreadListResult{}, fmt.Errorf("parsing thread list: %w", err)
 	}
 
-	result.Username = session.Username
-	result.BaseURL = session.BaseURL
 	result.ForumURL = forumRef
 	return result, nil
 }
@@ -175,16 +197,21 @@ func ReadThread(client *auth.Client, session auth.SessionInfo, threadRef string)
 	}, nil
 }
 
-func SearchThreads(client *auth.Client, session auth.SessionInfo, query string, page int) (SearchResult, error) {
-	return search(client, session, query, page, SearchModeThreads)
+func SearchThreads(client *auth.Client, session auth.SessionInfo, query string, cursor string, limit int) (SearchResult, error) {
+	return search(client, session, query, cursor, limit, SearchModeThreads)
 }
 
-func SearchPosts(client *auth.Client, session auth.SessionInfo, query string, page int) (SearchResult, error) {
-	return search(client, session, query, page, SearchModePosts)
+func SearchPosts(client *auth.Client, session auth.SessionInfo, query string, cursor string, limit int) (SearchResult, error) {
+	return search(client, session, query, cursor, limit, SearchModePosts)
 }
 
-func search(client *auth.Client, session auth.SessionInfo, query string, page int, mode SearchMode) (SearchResult, error) {
-	page = normalizePage(page)
+func search(client *auth.Client, session auth.SessionInfo, query string, cursor string, limit int, mode SearchMode) (SearchResult, error) {
+	startPage, err := parsePageCursor(cursor)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	limit = normalizeLimit(limit)
+
 	searchPageURL := client.BaseURL() + "/search/"
 	searchPageBody, err := client.FetchPage(searchPageURL)
 	if err != nil {
@@ -214,21 +241,14 @@ func search(client *auth.Client, session auth.SessionInfo, query string, page in
 		return SearchResult{}, fmt.Errorf("search request failed: %w", err)
 	}
 
-	result, err := parseSearchResults(client, searchBody, query, 1)
+	initialResult, err := parseSearchResults(client, searchBody, query, 1)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("parsing search results: %w", err)
 	}
 
-	for currentPage := 1; currentPage < page && result.NextPageURL != ""; currentPage++ {
-		searchBody, err = client.FetchPage(result.NextPageURL)
-		if err != nil {
-			return SearchResult{}, fmt.Errorf("fetching search page %d: %w", currentPage+1, err)
-		}
-
-		result, err = parseSearchResults(client, searchBody, query, currentPage+1)
-		if err != nil {
-			return SearchResult{}, fmt.Errorf("parsing search page %d: %w", currentPage+1, err)
-		}
+	result, err := collectSearchPages(client, query, mode, startPage, limit, initialResult)
+	if err != nil {
+		return SearchResult{}, err
 	}
 
 	result.Username = session.Username
@@ -242,6 +262,143 @@ func normalizePage(page int) int {
 		return 1
 	}
 	return page
+}
+
+func normalizeLimit(limit int) int {
+	if limit < 0 {
+		return 100
+	}
+	return limit
+}
+
+func parsePageCursor(cursor string) (int, error) {
+	if strings.TrimSpace(cursor) == "" {
+		return 1, nil
+	}
+
+	page, err := strconv.Atoi(strings.TrimSpace(cursor))
+	if err != nil || page < 1 {
+		return 0, fmt.Errorf("invalid page cursor %q", cursor)
+	}
+
+	return page, nil
+}
+
+func formatPageCursor(page int) string {
+	if page < 1 {
+		return ""
+	}
+	return strconv.Itoa(page)
+}
+
+func collectThreadPages(client *auth.Client, forumRef string, startPage int, limit int) (ThreadListResult, error) {
+	current, err := listThreadsPage(client, forumRef, 1)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+
+	currentPage := 1
+	for currentPage < startPage {
+		if current.NextPageURL == "" {
+			break
+		}
+
+		body, err := client.FetchPage(current.NextPageURL)
+		if err != nil {
+			return ThreadListResult{}, fmt.Errorf("fetching thread list page %d: %w", currentPage+1, err)
+		}
+
+		current, err = parseThreadList(client, body, currentPage+1)
+		if err != nil {
+			return ThreadListResult{}, fmt.Errorf("parsing thread list page %d: %w", currentPage+1, err)
+		}
+		current.ForumURL = client.ResolveURL(forumRef)
+		currentPage++
+	}
+
+	combined := current
+	combined.Page = currentPage
+	combined.Limit = limit
+	combined.PagesRead = 1
+	combined.NextPage = nextCursorFromURL(currentPage, combined.NextPageURL)
+
+	for (limit == 0 || len(combined.Threads) < limit) && combined.NextPageURL != "" {
+		body, err := client.FetchPage(combined.NextPageURL)
+		if err != nil {
+			return ThreadListResult{}, fmt.Errorf("fetching thread list page %d: %w", currentPage+1, err)
+		}
+
+		pageResult, err := parseThreadList(client, body, currentPage+1)
+		if err != nil {
+			return ThreadListResult{}, fmt.Errorf("parsing thread list page %d: %w", currentPage+1, err)
+		}
+
+		combined.Threads = append(combined.Threads, pageResult.Threads...)
+		combined.NextPageURL = pageResult.NextPageURL
+		currentPage++
+		combined.NextPage = nextCursorFromURL(currentPage, pageResult.NextPageURL)
+		combined.PagesRead++
+	}
+
+	return combined, nil
+}
+
+func collectSearchPages(client *auth.Client, query string, mode SearchMode, startPage int, limit int, initial SearchResult) (SearchResult, error) {
+	current := initial
+	currentPage := 1
+
+	for currentPage < startPage {
+		if current.NextPageURL == "" {
+			break
+		}
+
+		body, err := client.FetchPage(current.NextPageURL)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("fetching search page %d: %w", currentPage+1, err)
+		}
+
+		current, err = parseSearchResults(client, body, query, currentPage+1)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("parsing search page %d: %w", currentPage+1, err)
+		}
+
+		currentPage++
+	}
+
+	combined := current
+	combined.Page = currentPage
+	combined.Limit = limit
+	combined.PagesRead = 1
+	combined.SearchType = string(mode)
+	combined.NextPage = nextCursorFromURL(currentPage, combined.NextPageURL)
+
+	for (limit == 0 || len(combined.Results) < limit) && combined.NextPageURL != "" {
+		body, err := client.FetchPage(combined.NextPageURL)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("fetching search page %d: %w", currentPage+1, err)
+		}
+
+		pageResult, err := parseSearchResults(client, body, query, currentPage+1)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("parsing search page %d: %w", currentPage+1, err)
+		}
+
+		combined.Results = append(combined.Results, pageResult.Results...)
+		combined.NextPageURL = pageResult.NextPageURL
+		currentPage++
+		combined.PagesRead++
+		combined.NextPage = nextCursorFromURL(currentPage, pageResult.NextPageURL)
+	}
+
+	return combined, nil
+}
+
+func nextCursorFromURL(currentPage int, nextURL string) string {
+	if nextURL == "" {
+		return ""
+	}
+
+	return formatPageCursor(currentPage + 1)
 }
 
 func forumURL(client *auth.Client, forumRef string, page int) string {

@@ -9,29 +9,31 @@ import (
 
 type SearchThreadsCmd struct {
 	Query string `arg:"" required:"" help:"Search query."`
-	Page  int    `default:"1" help:"Page number."`
+	Page  string `help:"Page cursor returned by a previous call."`
+	Limit int    `default:"100" help:"Minimum number of results to collect; 0 means all pages."`
 }
 
 func (cmd *SearchThreadsCmd) Run(app *App) error {
-	return runSearch(app, cmd.Query, cmd.Page, scraper.SearchThreads)
+	return runSearch(app, cmd.Query, cmd.Page, cmd.Limit, scraper.SearchThreads)
 }
 
 type SearchPostsCmd struct {
 	Query string `arg:"" required:"" help:"Search query."`
-	Page  int    `default:"1" help:"Page number."`
+	Page  string `help:"Page cursor returned by a previous call."`
+	Limit int    `default:"100" help:"Minimum number of results to collect; 0 means all pages."`
 }
 
 func (cmd *SearchPostsCmd) Run(app *App) error {
-	return runSearch(app, cmd.Query, cmd.Page, scraper.SearchPosts)
+	return runSearch(app, cmd.Query, cmd.Page, cmd.Limit, scraper.SearchPosts)
 }
 
-func runSearch(app *App, query string, page int, searchFunc func(client *auth.Client, session auth.SessionInfo, query string, page int) (scraper.SearchResult, error)) error {
+func runSearch(app *App, query string, page string, limit int, searchFunc func(client *auth.Client, session auth.SessionInfo, query, cursor string, limit int) (scraper.SearchResult, error)) error {
 	client, session, err := app.login()
 	if err != nil {
 		return err
 	}
 
-	result, err := searchFunc(client, session, query, page)
+	result, err := searchFunc(client, session, query, page, limit)
 	if err != nil {
 		return err
 	}
@@ -51,8 +53,11 @@ func runSearch(app *App, query string, page int, searchFunc func(client *auth.Cl
 			fmt.Printf("  %s\n", truncate(item.Snippet, 180))
 		}
 	}
+	if result.NextPage != "" {
+		fmt.Printf("\nNext page cursor: %s\n", result.NextPage)
+	}
 	if result.NextPageURL != "" {
-		fmt.Printf("\nNext page: %s\n", result.NextPageURL)
+		fmt.Printf("Next page URL: %s\n", result.NextPageURL)
 	}
 
 	return nil

@@ -40,7 +40,10 @@ type UserPostsResult struct {
 	BaseURL     string            `json:"base_url"`
 	UserURL     string            `json:"user_url"`
 	Page        int               `json:"page"`
+	Limit       int               `json:"limit,omitempty"`
+	PagesRead   int               `json:"pages_read,omitempty"`
 	Posts       []UserPostSummary `json:"posts"`
+	NextPage    string            `json:"next_page,omitempty"`
 	NextPageURL string            `json:"next_page_url,omitempty"`
 }
 
@@ -56,7 +59,10 @@ type UserThreadsResult struct {
 	BaseURL     string              `json:"base_url"`
 	UserURL     string              `json:"user_url"`
 	Page        int                 `json:"page"`
+	Limit       int                 `json:"limit,omitempty"`
+	PagesRead   int                 `json:"pages_read,omitempty"`
 	Threads     []UserThreadSummary `json:"threads"`
+	NextPage    string              `json:"next_page,omitempty"`
 	NextPageURL string              `json:"next_page_url,omitempty"`
 }
 
@@ -80,8 +86,12 @@ func ReadProfile(client *auth.Client, session auth.SessionInfo, userRef string) 
 	return profile, nil
 }
 
-func ListUserPosts(client *auth.Client, session auth.SessionInfo, userRef string, page int) (UserPostsResult, error) {
-	page = normalizePage(page)
+func ListUserPosts(client *auth.Client, session auth.SessionInfo, userRef string, cursor string, limit int) (UserPostsResult, error) {
+	startPage, err := parsePageCursor(cursor)
+	if err != nil {
+		return UserPostsResult{}, err
+	}
+	limit = normalizeLimit(limit)
 
 	profile, err := ReadProfile(client, session, userRef)
 	if err != nil {
@@ -93,8 +103,9 @@ func ListUserPosts(client *auth.Client, session auth.SessionInfo, userRef string
 		return UserPostsResult{}, fmt.Errorf("profile does not expose recent content URL")
 	}
 
+	var currentPage int
 	var result UserPostsResult
-	for currentPage := 1; currentPage <= page; currentPage++ {
+	for currentPage = 1; currentPage <= startPage; currentPage++ {
 		body, err := client.FetchPage(currentURL)
 		if err != nil {
 			return UserPostsResult{}, fmt.Errorf("fetching user posts page %d: %w", currentPage, err)
@@ -105,12 +116,33 @@ func ListUserPosts(client *auth.Client, session auth.SessionInfo, userRef string
 			return UserPostsResult{}, fmt.Errorf("parsing user posts page %d: %w", currentPage, err)
 		}
 
-		if currentPage < page {
+		if currentPage < startPage {
 			if result.NextPageURL == "" {
 				break
 			}
 			currentURL = result.NextPageURL
 		}
+	}
+
+	result.Page = currentPage - 1
+	result.Limit = limit
+	result.PagesRead = 1
+	result.NextPage = nextCursorFromURL(result.Page, result.NextPageURL)
+	for (limit == 0 || len(result.Posts) < limit) && result.NextPageURL != "" {
+		body, err := client.FetchPage(result.NextPageURL)
+		if err != nil {
+			return UserPostsResult{}, fmt.Errorf("fetching user posts page %d: %w", result.Page+result.PagesRead, err)
+		}
+
+		pageResult, err := parseUserPosts(client, body, profile.UserURL, result.Page+result.PagesRead)
+		if err != nil {
+			return UserPostsResult{}, fmt.Errorf("parsing user posts page %d: %w", result.Page+result.PagesRead, err)
+		}
+
+		result.Posts = append(result.Posts, pageResult.Posts...)
+		result.NextPageURL = pageResult.NextPageURL
+		result.PagesRead++
+		result.NextPage = nextCursorFromURL(result.Page+result.PagesRead-1, pageResult.NextPageURL)
 	}
 
 	result.Username = session.Username
@@ -119,8 +151,12 @@ func ListUserPosts(client *auth.Client, session auth.SessionInfo, userRef string
 	return result, nil
 }
 
-func ListUserThreads(client *auth.Client, session auth.SessionInfo, userRef string, page int) (UserThreadsResult, error) {
-	page = normalizePage(page)
+func ListUserThreads(client *auth.Client, session auth.SessionInfo, userRef string, cursor string, limit int) (UserThreadsResult, error) {
+	startPage, err := parsePageCursor(cursor)
+	if err != nil {
+		return UserThreadsResult{}, err
+	}
+	limit = normalizeLimit(limit)
 
 	profile, err := ReadProfile(client, session, userRef)
 	if err != nil {
@@ -132,8 +168,9 @@ func ListUserThreads(client *auth.Client, session auth.SessionInfo, userRef stri
 		return UserThreadsResult{}, fmt.Errorf("profile does not expose user threads URL")
 	}
 
+	var currentPage int
 	var result UserThreadsResult
-	for currentPage := 1; currentPage <= page; currentPage++ {
+	for currentPage = 1; currentPage <= startPage; currentPage++ {
 		body, err := client.FetchPage(currentURL)
 		if err != nil {
 			return UserThreadsResult{}, fmt.Errorf("fetching user threads page %d: %w", currentPage, err)
@@ -144,12 +181,33 @@ func ListUserThreads(client *auth.Client, session auth.SessionInfo, userRef stri
 			return UserThreadsResult{}, fmt.Errorf("parsing user threads page %d: %w", currentPage, err)
 		}
 
-		if currentPage < page {
+		if currentPage < startPage {
 			if result.NextPageURL == "" {
 				break
 			}
 			currentURL = result.NextPageURL
 		}
+	}
+
+	result.Page = currentPage - 1
+	result.Limit = limit
+	result.PagesRead = 1
+	result.NextPage = nextCursorFromURL(result.Page, result.NextPageURL)
+	for (limit == 0 || len(result.Threads) < limit) && result.NextPageURL != "" {
+		body, err := client.FetchPage(result.NextPageURL)
+		if err != nil {
+			return UserThreadsResult{}, fmt.Errorf("fetching user threads page %d: %w", result.Page+result.PagesRead, err)
+		}
+
+		pageResult, err := parseUserThreads(client, body, profile.UserURL, result.Page+result.PagesRead)
+		if err != nil {
+			return UserThreadsResult{}, fmt.Errorf("parsing user threads page %d: %w", result.Page+result.PagesRead, err)
+		}
+
+		result.Threads = append(result.Threads, pageResult.Threads...)
+		result.NextPageURL = pageResult.NextPageURL
+		result.PagesRead++
+		result.NextPage = nextCursorFromURL(result.Page+result.PagesRead-1, pageResult.NextPageURL)
 	}
 
 	result.Username = session.Username
@@ -158,12 +216,12 @@ func ListUserThreads(client *auth.Client, session auth.SessionInfo, userRef stri
 	return result, nil
 }
 
-func ListMyThreads(client *auth.Client, session auth.SessionInfo, page int) (ThreadListResult, error) {
-	return ListThreads(client, session, "/find-threads/started", page)
+func ListMyThreads(client *auth.Client, session auth.SessionInfo, cursor string, limit int) (ThreadListResult, error) {
+	return ListThreads(client, session, "/find-threads/started", cursor, limit)
 }
 
-func ListThreadsIParticipated(client *auth.Client, session auth.SessionInfo, page int) (ThreadListResult, error) {
-	return ListThreads(client, session, "/find-threads/contributed", page)
+func ListThreadsIParticipated(client *auth.Client, session auth.SessionInfo, cursor string, limit int) (ThreadListResult, error) {
+	return ListThreads(client, session, "/find-threads/contributed", cursor, limit)
 }
 
 func parseUserProfile(client *auth.Client, body []byte) (UserProfile, error) {

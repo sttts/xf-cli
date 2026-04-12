@@ -25,7 +25,7 @@ func newLiveSession(t *testing.T) (*auth.Client, auth.SessionInfo) {
 	t.Helper()
 
 	username, password := requireLiveCredentials(t)
-	client, err := auth.NewClient("https://www.rc-network.de", false)
+	client, err := auth.NewClient("https://www.rc-network.de", 0)
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestLiveListForums(t *testing.T) {
 
 func TestLiveListThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListThreads(client, session, "/forums/flugmodellbau-allgemein.31/", 1)
+	result, err := scraper.ListThreads(client, session, "/forums/flugmodellbau-allgemein.31/", "", 100)
 	if err != nil {
 		t.Fatalf("list threads: %v", err)
 	}
@@ -73,6 +73,25 @@ func TestLiveListThreads(t *testing.T) {
 	}
 	if len(result.Threads) == 0 {
 		t.Fatal("expected thread summaries")
+	}
+}
+
+func TestLiveListThreadsCursor(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListThreads(client, session, "/forums/flugmodellbau-allgemein.31/", "", 1)
+	if err != nil {
+		t.Fatalf("list threads with cursor: %v", err)
+	}
+	if result.NextPage == "" {
+		t.Fatal("expected next page cursor")
+	}
+
+	nextResult, err := scraper.ListThreads(client, session, "/forums/flugmodellbau-allgemein.31/", result.NextPage, 1)
+	if err != nil {
+		t.Fatalf("list threads next cursor: %v", err)
+	}
+	if nextResult.Page <= result.Page {
+		t.Fatalf("expected next page to advance, got %d after %d", nextResult.Page, result.Page)
 	}
 }
 
@@ -111,7 +130,7 @@ func TestLiveReadThread(t *testing.T) {
 
 func TestLiveSearchThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.SearchThreads(client, session, "segler", 1)
+	result, err := scraper.SearchThreads(client, session, "segler", "", 100)
 	if err != nil {
 		t.Fatalf("search threads: %v", err)
 	}
@@ -123,9 +142,28 @@ func TestLiveSearchThreads(t *testing.T) {
 	}
 }
 
+func TestLiveSearchThreadsCursor(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.SearchThreads(client, session, "segler", "", 1)
+	if err != nil {
+		t.Fatalf("search threads with cursor: %v", err)
+	}
+	if result.NextPage == "" {
+		t.Fatal("expected next page cursor")
+	}
+
+	nextResult, err := scraper.SearchThreads(client, session, "segler", result.NextPage, 1)
+	if err != nil {
+		t.Fatalf("search threads next cursor: %v", err)
+	}
+	if nextResult.Page <= result.Page {
+		t.Fatalf("expected next page to advance, got %d after %d", nextResult.Page, result.Page)
+	}
+}
+
 func TestLiveSearchPosts(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.SearchPosts(client, session, "segler", 1)
+	result, err := scraper.SearchPosts(client, session, "segler", "", 100)
 	if err != nil {
 		t.Fatalf("search posts: %v", err)
 	}
@@ -171,7 +209,7 @@ func TestLiveRecentContentPage(t *testing.T) {
 
 func TestLiveFindStartedThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListThreads(client, session, "/find-threads/started", 1)
+	result, err := scraper.ListThreads(client, session, "/find-threads/started", "", 100)
 	if err != nil {
 		t.Fatalf("list started threads: %v", err)
 	}
@@ -185,7 +223,7 @@ func TestLiveFindStartedThreads(t *testing.T) {
 
 func TestLiveFindContributedThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListThreads(client, session, "/find-threads/contributed", 1)
+	result, err := scraper.ListThreads(client, session, "/find-threads/contributed", "", 100)
 	if err != nil {
 		t.Fatalf("list contributed threads: %v", err)
 	}
@@ -216,7 +254,7 @@ func TestLiveReadProfile(t *testing.T) {
 
 func TestLiveListUserPosts(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListUserPosts(client, session, "/members/sttts.31018/", 1)
+	result, err := scraper.ListUserPosts(client, session, "/members/sttts.31018/", "", 100)
 	if err != nil {
 		t.Fatalf("list user posts: %v", err)
 	}
@@ -230,7 +268,7 @@ func TestLiveListUserPosts(t *testing.T) {
 
 func TestLiveListUserThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListUserThreads(client, session, "/members/sttts.31018/", 1)
+	result, err := scraper.ListUserThreads(client, session, "/members/sttts.31018/", "", 100)
 	if err != nil {
 		t.Fatalf("list user threads: %v", err)
 	}
@@ -244,7 +282,7 @@ func TestLiveListUserThreads(t *testing.T) {
 
 func TestLiveListMyThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListMyThreads(client, session, 1)
+	result, err := scraper.ListMyThreads(client, session, "", 100)
 	if err != nil {
 		t.Fatalf("list my threads: %v", err)
 	}
@@ -255,7 +293,7 @@ func TestLiveListMyThreads(t *testing.T) {
 
 func TestLiveListThreadsIParticipated(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.ListThreadsIParticipated(client, session, 1)
+	result, err := scraper.ListThreadsIParticipated(client, session, "", 100)
 	if err != nil {
 		t.Fatalf("list threads i participated: %v", err)
 	}

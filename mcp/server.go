@@ -14,7 +14,7 @@ type Config struct {
 	BaseURL  string
 	Username string
 	Password string
-	Verbose  bool
+	Verbose  int
 }
 
 func (c Config) Validate() error {
