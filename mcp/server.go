@@ -22,11 +22,11 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.BaseURL) == "" {
 		return fmt.Errorf("base URL is required")
 	}
-	if strings.TrimSpace(c.Username) == "" {
-		return fmt.Errorf("MCP mode requires XF_USERNAME or --username")
-	}
-	if strings.TrimSpace(c.Password) == "" {
-		return fmt.Errorf("MCP mode requires XF_PASSWORD or --password")
+
+	hasUsername := strings.TrimSpace(c.Username) != ""
+	hasPassword := strings.TrimSpace(c.Password) != ""
+	if hasUsername != hasPassword {
+		return fmt.Errorf("MCP mode requires both XF_USERNAME and XF_PASSWORD when no stored session is available")
 	}
 
 	return nil
@@ -102,7 +102,7 @@ func NewServer(config Config) (*server.MCPServer, error) {
 	mcpServer := server.NewMCPServer(
 		"xf-cli",
 		"0.1.0",
-		server.WithInstructions("Read-only XenForo frontend access for rc-network.de over browser login. Use the provided tools instead of direct scraping."),
+		server.WithInstructions("Authenticated read-only XenForo frontend access for rc-network.de via stored browser session or XF_USERNAME/XF_PASSWORD fallback. Use the provided tools instead of direct scraping."),
 		server.WithToolCapabilities(false),
 		server.WithRecovery(),
 	)
