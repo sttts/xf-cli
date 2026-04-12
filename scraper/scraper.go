@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/sttts/xf-mcp/auth"
+	"github.com/sttts/xf-cli/auth"
 )
 
 type ForumCategory struct {

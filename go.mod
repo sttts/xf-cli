@@ -1,4 +1,4 @@
-module github.com/sttts/xf-mcp
+module github.com/sttts/xf-cli
 
 go 1.25.5
 

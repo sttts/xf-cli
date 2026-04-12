@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sttts/xf-mcp/cmds"
+	"github.com/sttts/xf-cli/cmds"
 )
 
 func main() {

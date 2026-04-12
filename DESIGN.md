@@ -303,7 +303,7 @@ The PoC proved the forum behavior. The next phase should split the monolith into
 Planned structure:
 
 ```text
-xf-mcp/
+xf-cli/
 ├── DESIGN.md
 ├── go.mod
 ├── go.sum

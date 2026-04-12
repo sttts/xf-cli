@@ -3,7 +3,7 @@ package cmds
 import (
 	"fmt"
 
-	"github.com/sttts/xf-mcp/scraper"
+	"github.com/sttts/xf-cli/scraper"
 )
 
 type ListForumsCmd struct{}

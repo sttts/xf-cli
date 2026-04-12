@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sttts/xf-mcp/auth"
-	"github.com/sttts/xf-mcp/scraper"
+	"github.com/sttts/xf-cli/auth"
+	"github.com/sttts/xf-cli/scraper"
 )
 
 func requireLiveCredentials(t *testing.T) (string, string) {
@@ -177,5 +177,72 @@ func TestLiveFindContributedThreads(t *testing.T) {
 	}
 	if len(result.Threads) == 0 {
 		t.Fatal("expected contributed threads")
+	}
+}
+
+func TestLiveReadProfile(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ReadProfile(client, session, "/members/sttts.31018/")
+	if err != nil {
+		t.Fatalf("read profile: %v", err)
+	}
+	if result.DisplayName != "sttts" {
+		t.Fatalf("expected display name sttts, got %q", result.DisplayName)
+	}
+	if result.RecentContentURL == "" {
+		t.Fatal("expected recent content url")
+	}
+	if result.AllThreadsURL == "" {
+		t.Fatal("expected all threads url")
+	}
+}
+
+func TestLiveListUserPosts(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListUserPosts(client, session, "/members/sttts.31018/", 1)
+	if err != nil {
+		t.Fatalf("list user posts: %v", err)
+	}
+	if len(result.Posts) == 0 {
+		t.Fatal("expected user posts")
+	}
+	if result.Posts[0].PostURL == "" {
+		t.Fatal("expected post url")
+	}
+}
+
+func TestLiveListUserThreads(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListUserThreads(client, session, "/members/sttts.31018/", 1)
+	if err != nil {
+		t.Fatalf("list user threads: %v", err)
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected user threads")
+	}
+	if result.Threads[0].URL == "" {
+		t.Fatal("expected thread url")
+	}
+}
+
+func TestLiveListMyThreads(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListMyThreads(client, session, 1)
+	if err != nil {
+		t.Fatalf("list my threads: %v", err)
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected my threads")
+	}
+}
+
+func TestLiveListThreadsIParticipated(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListThreadsIParticipated(client, session, 1)
+	if err != nil {
+		t.Fatalf("list threads i participated: %v", err)
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected participated threads")
 	}
 }

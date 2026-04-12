@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
-	"github.com/sttts/xf-mcp/auth"
+	"github.com/sttts/xf-cli/auth"
 	"golang.org/x/term"
 )
 
@@ -24,6 +24,11 @@ type CLI struct {
 	ListThreads ListThreadsCmd `cmd:"" name:"list_threads" help:"List threads for a forum."`
 	ReadThread  ReadThreadCmd  `cmd:"" name:"read_thread" help:"Read a full thread across all pages."`
 	Search      SearchCmd      `cmd:"" name:"search" help:"Search the forum."`
+	ReadProfile ReadProfileCmd `cmd:"" name:"read_profile" help:"Read a public user profile."`
+	ListUserPosts ListUserPostsCmd `cmd:"" name:"list_user_posts" help:"List a user's public posts."`
+	ListUserThreads ListUserThreadsCmd `cmd:"" name:"list_user_threads" help:"List threads started by a user."`
+	ListMyThreads ListMyThreadsCmd `cmd:"" name:"list_my_threads" help:"List threads started by the authenticated user."`
+	ListThreadsIParticipated ListThreadsIParticipatedCmd `cmd:"" name:"list_threads_i_participated" help:"List threads with posts by the authenticated user."`
 }
 
 type App struct {
@@ -37,7 +42,7 @@ type App struct {
 func Execute() error {
 	cli := CLI{}
 	parser := kong.Parse(&cli,
-		kong.Name("xf-mcp"),
+		kong.Name("xf-cli"),
 		kong.Description("Read-only XenForo frontend client and future MCP tool backend."),
 	)
 
