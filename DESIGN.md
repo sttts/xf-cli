@@ -1,4 +1,4 @@
-# XenForo MCP Server Design
+# xf-cli Design
 
 ## Goal
 
@@ -12,19 +12,22 @@ Key constraint:
 - no admin privileges
 - authentication must work through the normal browser login flow
 
-## Current PoC Status
+## Current Status
 
-The PoC in [`main.go`](./main.go) has already validated these assumptions against `rc-network.de`:
+The current implementation has validated these assumptions against `rc-network.de`:
 
 - browser-style login with username/password works
 - a logged-in session yields valid XenForo cookies and a fresh `_xfToken`
 - XenForo REST API exists, but still rejects normal session cookies without `XF-Api-Key`
 - forum overview scraping works
 - forum thread list scraping works
+- `list_new_posts` works
 - full thread reading across all pages works
 - image extraction from posts works
 - `search_threads` works
 - `search_posts` works
+- session persistence and revalidation works
+- MCP stdio tool registration works
 
 This means the project direction is confirmed:
 - use frontend HTML, not XenForo REST API
@@ -58,7 +61,7 @@ The MCP server should expose the same logical operations that already exist in t
 Shared conventions:
 - all URLs returned by tools should be absolute URLs
 - all tools are read-only
-- pagination tools return one page at a time unless explicitly documented otherwise
+- pagination tools use logical paging with `page` cursors and `limit`
 - `read_thread` is intentionally multi-page and returns the whole thread
 
 ### Common Error Shape
@@ -120,11 +123,15 @@ Purpose:
 Input:
 - `forum_url`
 - optional `page`
+- optional `limit`
 
 Output:
 - forum title
 - current page
+- requested limit
+- pages read
 - thread summaries
+- next-page cursor if available
 - next-page URL if available
 
 Each thread summary should include:
@@ -141,8 +148,33 @@ Result fields:
 - `forum_title`
 - `forum_url`
 - `page`
+- `limit`
+- `pages_read`
 - `threads[]`
+- `next_page`
 - `next_page_url`
+
+### `list_new_posts`
+
+Purpose:
+- list the authenticated user-visible "Neue Beiträge" stream
+
+Input:
+- optional `page`
+- optional `limit`
+
+Output:
+- stream title
+- current page
+- requested limit
+- pages read
+- thread summaries
+- next-page cursor if available
+- next-page URL if available
+
+Notes:
+- backed by XenForo route `/whats-new/posts/`
+- page 1 resolves through XenForo's dynamic result id and then continues over normal next-page links
 
 ### `read_thread`
 
@@ -190,12 +222,16 @@ Purpose:
 Input:
 - `query`
 - optional `page`
+- optional `limit`
 
 Output:
 - `search_type=threads`
 - query
 - current page
+- requested limit
+- pages read
 - search results
+- next-page cursor if available
 - next-page URL if available
 
 Each result should include:
@@ -207,9 +243,12 @@ Current implemented result fields:
 - `search_type`
 - `query`
 - `page`
+- `limit`
+- `pages_read`
 - `results[].title`
 - `results[].url`
 - `results[].snippet`
+- `next_page`
 - `next_page_url`
 
 ### `search_posts`
@@ -220,12 +259,16 @@ Purpose:
 Input:
 - `query`
 - optional `page`
+- optional `limit`
 
 Output:
 - `search_type=posts`
 - query
 - current page
+- requested limit
+- pages read
 - search results
+- next-page cursor if available
 - next-page URL if available
 
 Each result should include:
@@ -237,9 +280,12 @@ Current implemented result fields:
 - `search_type`
 - `query`
 - `page`
+- `limit`
+- `pages_read`
 - `results[].title`
 - `results[].url`
 - `results[].snippet`
+- `next_page`
 - `next_page_url`
 
 ### `follow_link`
@@ -367,11 +413,15 @@ Purpose:
 Input:
 - `user_url`
 - optional `page`
+- optional `limit`
 
 Output:
 - canonical user URL
 - current page
+- requested limit
+- pages read
 - public post summaries
+- next-page cursor if available
 - next-page URL if available
 
 Each post summary should include:
@@ -384,6 +434,8 @@ Each post summary should include:
 Current implemented result fields:
 - `user_url`
 - `page`
+- `limit`
+- `pages_read`
 - `posts[].title`
 - `posts[].post_url`
 - `posts[].thread_url`
@@ -392,6 +444,7 @@ Current implemented result fields:
 - `posts[].forum_title`
 - `posts[].forum_url`
 - `posts[].snippet`
+- `next_page`
 - `next_page_url`
 
 ### `list_user_threads`
@@ -402,20 +455,27 @@ Purpose:
 Input:
 - `user_url`
 - optional `page`
+- optional `limit`
 
 Output:
 - canonical user URL
 - current page
+- requested limit
+- pages read
 - thread summaries
+- next-page cursor if available
 - next-page URL if available
 
 Current implemented result fields:
 - `user_url`
 - `page`
+- `limit`
+- `pages_read`
 - `threads[].title`
 - `threads[].url`
 - `threads[].snippet`
 - `threads[].posted_at`
+- `next_page`
 - `next_page_url`
 
 ### `list_my_threads`
@@ -425,9 +485,11 @@ Purpose:
 
 Input:
 - optional `page`
+- optional `limit`
 
 Output:
 - thread summaries
+- next-page cursor if available
 - next-page URL if available
 
 Notes:
@@ -441,9 +503,11 @@ Purpose:
 
 Input:
 - optional `page`
+- optional `limit`
 
 Output:
 - thread summaries
+- next-page cursor if available
 - next-page URL if available
 
 Notes:
@@ -466,35 +530,34 @@ Posting is explicitly out of scope:
 
 The PoC proved the forum behavior. The next phase should split the monolith into focused packages.
 
-Planned structure:
+Current structure:
 
 ```text
 xf-cli/
 ├── DESIGN.md
+├── README.md
 ├── go.mod
 ├── go.sum
 ├── main.go
 ├── auth/
 │   ├── client.go
 │   ├── login.go
-│   ├── session.go
-│   └── credentials.go
+│   ├── parser_test.go
+│   ├── session_test.go
+│   └── testdata/
 ├── scraper/
-│   ├── forums.go
-│   ├── threads.go
-│   ├── posts.go
-│   ├── search.go
+│   ├── scraper.go
+│   ├── users.go
 │   ├── links.go
 │   └── images.go
+├── cmds/
+│   ├── root.go
+│   └── command files
 ├── mcp/
 │   ├── server.go
-│   ├── tools.go
-│   └── types.go
-└── internal/
-    └── xfhtml/
-        ├── fetch.go
-        ├── urls.go
-        └── parse.go
+│   └── tools.go
+├── live_test.go
+└── mcp_live_test.go
 ```
 
 ## Component Responsibilities
@@ -503,7 +566,7 @@ xf-cli/
 
 Responsible for:
 - username/password sourcing
-- optional session persistence later
+- session persistence and revalidation
 - browser-style login flow
 - CSRF token extraction
 - authenticated `http.Client`
@@ -540,22 +603,18 @@ Responsible for:
 
 ## Session Model
 
-Initial version:
-- login per process start
-- keep cookies in an in-memory jar
-- fetch fresh `_xfToken` after login
-
-Later version:
-- persist session cookies and metadata to a config file
+Current version:
+- persist session cookies and metadata to `~/.config/xf-cli/session.json`
 - revalidate session on startup
 - relogin when expired
+- update stored cookies and `_xfToken` after successful verification
 
-Suggested persisted fields:
+Persisted fields:
 - `base_url`
 - username
 - cookies
-- last verified timestamp
-- last `_xfToken`
+- `saved_at`
+- `xf_token`
 
 ## HTML Parsing Strategy
 
@@ -589,17 +648,19 @@ This logic should live in one place, not inside every tool.
 
 ## Pagination Rules
 
-### Forums and searches
+### Lists and searches
 
-- return one page at a time
-- expose `next_page_url`
-- callers decide whether to continue
-
-### User activity
-
-- return one page at a time
-- expose `next_page_url`
-- normalize threads and post links back into canonical forum objects
+- `list_*` and `search_*` tools use logical paging
+- input `page` is a simple cursor string, not a raw XenForo URL
+- input `limit` is the minimum number of items to collect before stopping
+- if `page` is unset, collection starts at page 1 and continues until at least `limit` items have been gathered
+- if `limit=0`, the tool reads all available pages
+- responses include:
+  - `page` for the current logical cursor
+  - `limit` for the requested minimum item count
+  - `pages_read` for how many XenForo pages were traversed
+  - `next_page` when more results remain
+  - `next_page_url` for debugging and inspection
 
 ### Threads
 
@@ -657,17 +718,17 @@ Errors should preserve the forum’s German messages where useful, but also add 
 
 ## Observability
 
-Verbose logging should remain available because it was essential for the PoC.
+Verbose logging remains available because it was essential for the PoC and for live diagnosis against the real forum.
 
-Log when verbose:
-- request method and URL
-- form fields with masked password
-- response status
-- response headers
-- truncated body
-- cookies seen/set
-- pagination traversal decisions
-- canonicalization decisions for `follow_link`
+Verbosity levels:
+- `-v`: request method and URL
+- `-vv`: also form fields with masked password, response status, response headers, and cookies seen/set
+- `-vvv`: also truncated response bodies
+
+Additional logging:
+- session reuse, refresh, and save events log to `stderr`
+- pagination traversal decisions may log in verbose mode
+- canonicalization decisions for `follow_link` may log in verbose mode
 
 ## Risks
 
@@ -711,53 +772,43 @@ Mitigation:
 
 ## Testing Strategy
 
-Add tests before or during the refactor from `main.go` to packages.
+Current test layers:
 
-Test layers:
+- fixture-based parser tests in `auth/` for CSRF extraction and login error detection
+- fixture-based parser tests in `scraper/` for forum threads, thread posts, search results, user profiles, and URL helpers
+- unit tests for session persistence and cookie application in `auth/`
+- live integration tests in `live_test.go` against `rc-network.de` for login, session reuse, forums, threads, new posts, searches, user views, link following, and image resolution
+- live MCP smoke tests in `mcp_live_test.go`
 
-- unit tests for URL normalization
-- unit tests for HTML parsing on saved fixtures
-- session/login tests around token extraction and login-state detection
-- integration smoke tests for the live target, only when credentials are explicitly available
+Execution model:
 
-Recommended fixture set:
+- `go build ./...` validates the tree compiles cleanly
+- `make test` runs the full Go test suite
+- live tests require `XF_USERNAME` and `XF_PASSWORD`
+
+Current fixture set:
 - login page
-- authenticated home page
-- forum overview
+- login error page
 - forum thread list
-- thread page with pagination
-- thread page with multiple images
-- search page
+- thread page with posts and images
 - search result page
 - public member profile page
-- public member posts page
-- public member threads page
-
-## Implementation Order After This Design
-
-1. Extract auth code from `main.go` into `auth/`
-2. Extract scraper parsers into `scraper/`
-3. Add fixture-based tests for parsing and normalization
-4. Introduce MCP stdio server and register tools
-5. Implement public user-profile and user-activity tools
-6. Implement `follow_link`
-7. Implement `get_image`
-8. Add session persistence
 
 ## Summary
 
-The PoC already proved the core viability:
+The implemented system now covers the full intended read path:
 - browser login works
-- frontend scraping works
+- frontend scraping works through authenticated session reuse
+- forum, search, user, link, and image tools are exposed in both CLI and MCP stdio form
 - full thread traversal works
-- images can be extracted
+- images can be extracted and resolved
+- session persistence and revalidation works
 - `search_threads` works
 - `search_posts` works
+- `list_new_posts` works
 - REST API without `XF-Api-Key` is not usable for this project
 
-The next correct move is not more PoC expansion in `main.go`.
-The next correct move is:
-- refactor into packages
-- preserve the already validated behavior
-- surface the validated read-paths as MCP tools
-- keep the server strictly read-only
+The remaining work is mostly maintenance and hardening:
+- keep selectors aligned with XenForo markup changes
+- extend fixtures when new parsing cases appear
+- preserve strict read-only semantics
