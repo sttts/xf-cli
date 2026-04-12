@@ -30,6 +30,7 @@ type CLI struct {
 	ListMyThreads ListMyThreadsCmd `cmd:"" name:"list_my_threads" help:"List threads started by the authenticated user."`
 	ListThreadsIParticipated ListThreadsIParticipatedCmd `cmd:"" name:"list_threads_i_participated" help:"List threads with posts by the authenticated user."`
 	FollowLink FollowLinkCmd `cmd:"" name:"follow_link" help:"Resolve and normalize an internal forum link."`
+	GetImage GetImageCmd `cmd:"" name:"get_image" help:"Resolve image and attachment URLs."`
 }
 
 type App struct {

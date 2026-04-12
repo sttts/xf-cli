@@ -305,3 +305,31 @@ func TestLiveFollowLinkAttachment(t *testing.T) {
 		t.Fatal("expected image url from attachment")
 	}
 }
+
+func TestLiveGetImageFromAttachment(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.GetImage(client, session, "/attachments/piper-tc-jpg.9277151/")
+	if err != nil {
+		t.Fatalf("get image from attachment: %v", err)
+	}
+	if result.AttachmentURL == "" {
+		t.Fatal("expected attachment url")
+	}
+	if result.FullImageURL == "" {
+		t.Fatal("expected full image url")
+	}
+}
+
+func TestLiveGetImageFromDirectImage(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.GetImage(client, session, "https://www.rc-network.de/data/attachments/205/205458-62467cc69c476761618577652498d9f5.jpg?hash=YkZ8xpxHZ2")
+	if err != nil {
+		t.Fatalf("get image from direct image: %v", err)
+	}
+	if result.ThumbnailURL == "" {
+		t.Fatal("expected thumbnail url")
+	}
+	if result.FullImageURL == "" {
+		t.Fatal("expected full image url")
+	}
+}
