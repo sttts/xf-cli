@@ -2,6 +2,7 @@ package xfmcp
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -73,6 +74,8 @@ func (p *SessionProvider) Login() (*auth.Client, auth.SessionInfo, error) {
 				p.session = session
 				p.ready = true
 				_ = auth.SaveSession(p.sessionPath, session)
+				fmt.Fprintf(os.Stderr, "Using stored session: %s\n", p.sessionPath)
+				fmt.Fprintf(os.Stderr, "Updated stored session: %s\n", p.sessionPath)
 				return p.client, p.session, nil
 			}
 		}
@@ -84,6 +87,7 @@ func (p *SessionProvider) Login() (*auth.Client, auth.SessionInfo, error) {
 		p.session = session
 		p.ready = true
 		_ = auth.SaveSession(p.sessionPath, session)
+		fmt.Fprintf(os.Stderr, "Saved session: %s\n", p.sessionPath)
 	}
 
 	return p.client, p.session, nil

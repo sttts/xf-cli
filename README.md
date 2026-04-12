@@ -47,6 +47,20 @@ So this project uses the authenticated frontend and parses HTML instead.
 go build ./...
 ```
 
+## Install
+
+Install the CLI into your Go bin directory:
+
+```bash
+go install github.com/sttts/xf-cli@latest
+```
+
+Then use it directly:
+
+```bash
+xf-cli --help
+```
+
 ## Authentication
 
 Priority order:
@@ -59,10 +73,33 @@ Example:
 ```bash
 export XF_USERNAME=sttts
 export XF_PASSWORD='...'
-go run . list_forums
+xf-cli list_forums
 ```
 
 `.env` is intentionally not auto-loaded.
+
+### `login` persists the session
+
+This command does not only test credentials:
+
+```bash
+xf-cli login
+```
+
+A successful `login` writes the authenticated session to:
+
+```text
+~/.config/xf-cli/session.json
+```
+
+That stored session is then reused by:
+- later CLI commands
+- `xf-cli mcp`
+
+So the normal setup flow is:
+1. run `xf-cli login`
+2. confirm that `session.json` exists
+3. use the other CLI commands or start the MCP server
 
 ## Session persistence
 
@@ -77,6 +114,12 @@ On later runs, `xf-cli` tries to:
 2. verify it against the forum frontend
 3. reuse it if still valid
 4. fall back to a fresh login if it expired
+
+This applies to both:
+- CLI commands such as `list_threads`
+- MCP mode via `xf-cli mcp`
+
+If no valid stored session exists, `xf-cli` needs credentials again.
 
 ## CLI
 
@@ -99,15 +142,15 @@ Top-level commands:
 Examples:
 
 ```bash
-go run . login
-go run . list_forums --json
-go run . list_threads /forums/flugmodellbau-allgemein.31/ --limit=50
-go run . read_thread /threads/eure-sch%C3%B6nsten-modelle.144946/ --json
-go run . search_threads Fouga --limit=20
-go run . search_posts Fouga --limit=20
-go run . read_profile /members/sttts.31018/
-go run . follow_link /threads/eure-sch%C3%B6nsten-modelle.144946/latest
-go run . get_image /attachments/piper-tc-jpg.9277151/
+xf-cli login
+xf-cli list_forums --json
+xf-cli list_threads /forums/flugmodellbau-allgemein.31/ --limit=50
+xf-cli read_thread /threads/eure-sch%C3%B6nsten-modelle.144946/ --json
+xf-cli search_threads Fouga --limit=20
+xf-cli search_posts Fouga --limit=20
+xf-cli read_profile /members/sttts.31018/
+xf-cli follow_link /threads/eure-sch%C3%B6nsten-modelle.144946/latest
+xf-cli get_image /attachments/piper-tc-jpg.9277151/
 ```
 
 ### Logical paging
@@ -133,9 +176,9 @@ List and search commands use logical paging:
 Example:
 
 ```bash
-go run . -v search_posts Fouga --limit=5
-go run . -vv list_threads /forums/flugmodellbau-allgemein.31/ --limit=5
-go run . -vvv read_thread /threads/eure-sch%C3%B6nsten-modelle.144946/
+xf-cli -v search_posts Fouga --limit=5
+xf-cli -vv list_threads /forums/flugmodellbau-allgemein.31/ --limit=5
+xf-cli -vvv read_thread /threads/eure-sch%C3%B6nsten-modelle.144946/
 ```
 
 ## MCP mode
@@ -143,10 +186,105 @@ go run . -vvv read_thread /threads/eure-sch%C3%B6nsten-modelle.144946/
 Run the stdio MCP server with:
 
 ```bash
-go run . mcp
+xf-cli mcp
 ```
 
 The server speaks MCP over `stdin` / `stdout`. It does not expose an HTTP transport.
+
+### MCP authentication
+
+The MCP server uses the same auth/session logic as the CLI.
+
+Recommended setup:
+
+1. create a session once:
+
+```bash
+xf-cli login
+```
+
+2. start the MCP server:
+
+```bash
+xf-cli mcp
+```
+
+If the stored session is still valid, MCP starts without prompting.
+
+If the stored session is missing or expired, MCP needs credentials from:
+- `XF_USERNAME`
+- `XF_PASSWORD`
+
+Example:
+
+```bash
+XF_USERNAME=sttts XF_PASSWORD='...' xf-cli mcp
+```
+
+Important:
+- `.env` is not auto-loaded
+- MCP must not depend on interactive prompts in normal client setup
+- for reliable MCP startup, either create the session first with `login`, or pass `XF_USERNAME` / `XF_PASSWORD` in the environment of the MCP process
+
+### Claude Desktop
+
+`xf-cli` is a local stdio MCP server. In Claude Desktop, configure it as a command-based server and pass credentials through environment variables if you do not want to rely on the persisted session.
+
+Typical local setup:
+
+```json
+{
+  "mcpServers": {
+    "xf-cli": {
+      "command": "/absolute/path/to/xf-cli",
+      "args": ["mcp"],
+      "env": {
+        "XF_USERNAME": "your-user",
+        "XF_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+If you already created `~/.config/xf-cli/session.json` with `xf-cli login`, the `env` block can often be omitted until the session expires.
+
+### Claude
+
+For Claude clients that support local MCP stdio servers, use the same pattern:
+- launch `xf-cli mcp`
+- keep it on `stdin` / `stdout`
+- provide `XF_USERNAME` / `XF_PASSWORD` in the server environment if no persisted session is available
+
+The exact UI differs by Claude surface, but the important part is the same command:
+
+```bash
+/absolute/path/to/xf-cli mcp
+```
+
+### Codex
+
+Codex supports adding a local stdio MCP server directly.
+
+Example:
+
+```bash
+codex mcp add xf-cli --env XF_USERNAME=your-user --env XF_PASSWORD=your-password -- /absolute/path/to/xf-cli mcp
+```
+
+Then verify it with:
+
+```bash
+codex mcp list
+```
+
+If you want to rely on the persisted session instead, first run:
+
+```bash
+xf-cli login
+```
+
+and then add the MCP server without the credential env vars.
 
 Current MCP tools:
 - `list_forums`

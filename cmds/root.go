@@ -147,7 +147,9 @@ func (a *App) login() (*auth.Client, auth.SessionInfo, error) {
 		if stored, err := auth.LoadSession(a.sessionPath); err == nil && stored.BaseURL == a.baseURL {
 			session, err := client.VerifySession(stored)
 			if err == nil {
+				fmt.Fprintf(os.Stderr, "Using stored session: %s\n", a.sessionPath)
 				_ = auth.SaveSession(a.sessionPath, session)
+				fmt.Fprintf(os.Stderr, "Updated stored session: %s\n", a.sessionPath)
 				return client, session, nil
 			}
 		}
@@ -163,6 +165,7 @@ func (a *App) login() (*auth.Client, auth.SessionInfo, error) {
 	}
 	if a.sessionPath != "" {
 		_ = auth.SaveSession(a.sessionPath, session)
+		fmt.Fprintf(os.Stderr, "Saved session: %s\n", a.sessionPath)
 	}
 
 	return client, session, nil
