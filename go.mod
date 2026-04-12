@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
+	github.com/alecthomas/kong v1.9.0
 	golang.org/x/term v0.42.0
 )
 
