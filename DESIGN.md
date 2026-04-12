@@ -43,6 +43,51 @@ For the first implementation phase:
 
 The first useful MCP slice should expose these tools.
 
+All MCP transport for this project is:
+- stdio only
+- JSON-RPC 2.0 in MCP form
+- no HTTP server mode
+
+The CLI subcommands are expected to mirror the MCP tool names exactly.
+
+## MCP Tool Contracts
+
+The MCP server should expose the same logical operations that already exist in the CLI and scraper layer.
+
+Shared conventions:
+- all URLs returned by tools should be absolute URLs
+- all tools are read-only
+- pagination tools return one page at a time unless explicitly documented otherwise
+- `read_thread` is intentionally multi-page and returns the whole thread
+
+### Common Error Shape
+
+Tool failures should map to a stable internal shape before being translated to MCP tool errors.
+
+Minimum fields:
+- `code`
+- `message`
+- optional `details`
+
+Suggested stable codes:
+- `auth_login_failed`
+- `auth_session_expired`
+- `csrf_missing`
+- `http_error`
+- `page_structure_changed`
+- `not_found`
+- `forbidden`
+- `rate_limited`
+- `unsupported_link_type`
+- `not_an_image`
+
+### Common Input Conventions
+
+When a tool accepts a URL reference:
+- absolute forum URL is valid
+- forum-relative path is valid
+- internal XenForo route variants such as `latest`, `unread` and paged URLs are valid where relevant
+
 ### `list_forums`
 
 Purpose:
@@ -58,6 +103,13 @@ Output:
 
 Notes:
 - this is the entrypoint for discovery
+
+Result fields:
+- `categories[].title`
+- `categories[].url`
+- `categories[].description`
+- `categories[].forums[].title`
+- `categories[].forums[].url`
 
 ### `list_threads`
 
@@ -84,6 +136,13 @@ Each thread summary should include:
 - last-post-at timestamp string
 - last-poster
 
+Result fields:
+- `forum_title`
+- `forum_url`
+- `page`
+- `threads[]`
+- `next_page_url`
+
 ### `read_thread`
 
 Purpose:
@@ -105,6 +164,18 @@ Each post should include:
 - posted-at timestamp string
 - text content
 - images
+
+Each image entry should include:
+- `url`
+- `preview_url`
+- `alt`
+- `attachment_url`
+
+Result fields:
+- `thread_url`
+- `title`
+- `posts[]`
+- `pages_read`
 
 Important:
 - this tool must follow XenForo pagination until the complete thread has been collected
@@ -132,6 +203,14 @@ Each result should include:
 - canonical URL
 - snippet
 - optional result type when distinguishable
+
+Current implemented result fields:
+- `query`
+- `page`
+- `results[].title`
+- `results[].url`
+- `results[].snippet`
+- `next_page_url`
 
 ### `follow_link`
 
@@ -179,6 +258,18 @@ Why this tool matters:
 - XenForo emits many link variants such as `unread`, `latest`, attachment pages, post anchors and forum-relative URLs
 - callers should not reimplement URL normalization in each tool
 
+Current implemented result fields:
+- `input_url`
+- `type`
+- `canonical_url`
+- `resolved_url`
+- `thread_url`
+- `post_url`
+- `forum_url`
+- `attachment_url`
+- `image_url`
+- `content_type`
+
 ### `get_image`
 
 Purpose:
@@ -199,6 +290,14 @@ Notes:
 - `read_thread` should return image references inline
 - `get_image` is the dedicated resolver for image-oriented downstream clients
 
+Current implemented result fields:
+- `input_url`
+- `canonical_url`
+- `attachment_url`
+- `thumbnail_url`
+- `full_image_url`
+- `content_type`
+
 ### `read_profile`
 
 Purpose:
@@ -216,6 +315,19 @@ Output:
 
 Notes:
 - only public profile data is in scope
+
+Current implemented result fields:
+- `user_url`
+- `display_name`
+- `user_title`
+- `joined_at`
+- `last_activity`
+- `post_count`
+- `reaction_score`
+- `recent_content_url`
+- `about_url`
+- `all_content_url`
+- `all_threads_url`
 
 ### `list_user_posts`
 
@@ -239,6 +351,19 @@ Each post summary should include:
 - posted-at timestamp string
 - snippet
 
+Current implemented result fields:
+- `user_url`
+- `page`
+- `posts[].title`
+- `posts[].post_url`
+- `posts[].thread_url`
+- `posts[].thread_title`
+- `posts[].posted_at`
+- `posts[].forum_title`
+- `posts[].forum_url`
+- `posts[].snippet`
+- `next_page_url`
+
 ### `list_user_threads`
 
 Purpose:
@@ -254,6 +379,15 @@ Output:
 - thread summaries
 - next-page URL if available
 
+Current implemented result fields:
+- `user_url`
+- `page`
+- `threads[].title`
+- `threads[].url`
+- `threads[].snippet`
+- `threads[].posted_at`
+- `next_page_url`
+
 ### `list_my_threads`
 
 Purpose:
@@ -268,6 +402,7 @@ Output:
 
 Notes:
 - this is a convenience wrapper around the authenticated user’s public content
+- currently backed by XenForo route `/find-threads/started`
 
 ### `list_threads_i_participated`
 
@@ -284,6 +419,7 @@ Output:
 Notes:
 - this should map to XenForo’s public “threads with your posts” or equivalent frontend views when available
 - if the forum has no dedicated public view, the implementation may fall back to public user activity pages plus normalization
+- currently backed by XenForo route `/find-threads/contributed`
 
 Private messages are explicitly out of scope:
 - no reading conversations
