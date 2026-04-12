@@ -40,18 +40,19 @@ func TestLiveMCPListTools(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"list_forums":                  false,
-		"list_threads":                 false,
-		"read_thread":                  false,
-		"search_threads":               false,
-		"search_posts":                 false,
-		"read_profile":                 false,
-		"list_user_posts":              false,
-		"list_user_threads":            false,
-		"list_my_threads":              false,
-		"list_threads_i_participated":  false,
-		"follow_link":                  false,
-		"get_image":                    false,
+		"list_forums":                 false,
+		"list_threads":                false,
+		"list_new_posts":              false,
+		"read_thread":                 false,
+		"search_threads":              false,
+		"search_posts":                false,
+		"read_profile":                false,
+		"list_user_posts":             false,
+		"list_user_threads":           false,
+		"list_my_threads":             false,
+		"list_threads_i_participated": false,
+		"follow_link":                 false,
+		"get_image":                   false,
 	}
 
 	for _, tool := range result.Tools {

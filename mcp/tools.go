@@ -77,6 +77,19 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		},
 		{
 			Tool: readOnlyTool(
+				"list_new_posts",
+				"List new posts visible to the authenticated user.",
+				mcpapi.WithInputSchema[PageArgs](),
+				mcpapi.WithOutputSchema[scraper.ThreadListResult](),
+			),
+			Handler: mcpapi.NewStructuredToolHandler(func(ctx context.Context, request mcpapi.CallToolRequest, args PageArgs) (scraper.ThreadListResult, error) {
+				return withSession(provider, func(client *auth.Client, session auth.SessionInfo) (scraper.ThreadListResult, error) {
+					return scraper.ListNewPosts(client, session, args.Page, args.Limit)
+				})
+			}),
+		},
+		{
+			Tool: readOnlyTool(
 				"read_thread",
 				"Read a full thread across all pages, including extracted image references.",
 				mcpapi.WithInputSchema[ReadThreadArgs](),

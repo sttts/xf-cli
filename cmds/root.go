@@ -23,6 +23,7 @@ type CLI struct {
 	Login                    LoginCmd                    `cmd:"" name:"login" help:"Perform login and print session info."`
 	ListForums               ListForumsCmd               `cmd:"" name:"list_forums" help:"List forum categories and forums."`
 	ListThreads              ListThreadsCmd              `cmd:"" name:"list_threads" help:"List threads for a forum."`
+	ListNewPosts             ListNewPostsCmd             `cmd:"" name:"list_new_posts" help:"List new posts."`
 	ReadThread               ReadThreadCmd               `cmd:"" name:"read_thread" help:"Read a full thread across all pages."`
 	SearchThreads            SearchThreadsCmd            `cmd:"" name:"search_threads" help:"Search thread titles."`
 	SearchPosts              SearchPostsCmd              `cmd:"" name:"search_posts" help:"Search post contents."`

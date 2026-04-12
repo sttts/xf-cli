@@ -138,6 +138,23 @@ func ListThreads(client *auth.Client, session auth.SessionInfo, forumRef string,
 	return result, nil
 }
 
+func ListNewPosts(client *auth.Client, session auth.SessionInfo, cursor string, limit int) (ThreadListResult, error) {
+	startPage, err := parsePageCursor(cursor)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+	limit = normalizeLimit(limit)
+
+	result, err := collectDynamicThreadPages(client, client.BaseURL()+"/whats-new/posts/", startPage, limit)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+
+	result.Username = session.Username
+	result.BaseURL = session.BaseURL
+	return result, nil
+}
+
 func listThreadsPage(client *auth.Client, forumRef string, page int) (ThreadListResult, error) {
 	page = normalizePage(page)
 	forumRef = forumURL(client, forumRef, page)
@@ -297,6 +314,25 @@ func collectThreadPages(client *auth.Client, forumRef string, startPage int, lim
 		return ThreadListResult{}, err
 	}
 
+	return continueThreadPages(client, current, client.ResolveURL(forumRef), startPage, limit)
+}
+
+func collectDynamicThreadPages(client *auth.Client, entryURL string, startPage int, limit int) (ThreadListResult, error) {
+	body, err := client.FetchPage(entryURL)
+	if err != nil {
+		return ThreadListResult{}, fmt.Errorf("fetching thread list: %w", err)
+	}
+
+	current, err := parseThreadList(client, body, 1)
+	if err != nil {
+		return ThreadListResult{}, fmt.Errorf("parsing thread list: %w", err)
+	}
+	current.ForumURL = entryURL
+
+	return continueThreadPages(client, current, entryURL, startPage, limit)
+}
+
+func continueThreadPages(client *auth.Client, current ThreadListResult, forumURL string, startPage int, limit int) (ThreadListResult, error) {
 	currentPage := 1
 	for currentPage < startPage {
 		if current.NextPageURL == "" {
@@ -312,7 +348,7 @@ func collectThreadPages(client *auth.Client, forumRef string, startPage int, lim
 		if err != nil {
 			return ThreadListResult{}, fmt.Errorf("parsing thread list page %d: %w", currentPage+1, err)
 		}
-		current.ForumURL = client.ResolveURL(forumRef)
+		current.ForumURL = forumURL
 		currentPage++
 	}
 

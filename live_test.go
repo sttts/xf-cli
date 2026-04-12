@@ -111,6 +111,39 @@ func TestLiveListThreads(t *testing.T) {
 	}
 }
 
+func TestLiveListNewPosts(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListNewPosts(client, session, "", 100)
+	if err != nil {
+		t.Fatalf("list new posts: %v", err)
+	}
+	if result.ForumTitle == "" {
+		t.Fatal("expected title")
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected new post threads")
+	}
+}
+
+func TestLiveListNewPostsCursor(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListNewPosts(client, session, "", 1)
+	if err != nil {
+		t.Fatalf("list new posts with cursor: %v", err)
+	}
+	if result.NextPage == "" {
+		t.Fatal("expected next page cursor")
+	}
+
+	nextResult, err := scraper.ListNewPosts(client, session, result.NextPage, 1)
+	if err != nil {
+		t.Fatalf("list new posts next cursor: %v", err)
+	}
+	if nextResult.Page <= result.Page {
+		t.Fatalf("expected next page to advance, got %d after %d", nextResult.Page, result.Page)
+	}
+}
+
 func TestLiveListThreadsCursor(t *testing.T) {
 	client, session := newLiveSession(t)
 	result, err := scraper.ListThreads(client, session, "/forums/flugmodellbau-allgemein.31/", "", 1)
