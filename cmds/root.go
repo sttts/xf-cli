@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
+	xfmcp "github.com/sttts/xf-cli/mcp"
 	"github.com/sttts/xf-cli/auth"
 	"golang.org/x/term"
 )
@@ -23,7 +24,8 @@ type CLI struct {
 	ListForums  ListForumsCmd  `cmd:"" name:"list_forums" help:"List forum categories and forums."`
 	ListThreads ListThreadsCmd `cmd:"" name:"list_threads" help:"List threads for a forum."`
 	ReadThread  ReadThreadCmd  `cmd:"" name:"read_thread" help:"Read a full thread across all pages."`
-	Search      SearchCmd      `cmd:"" name:"search" help:"Search the forum."`
+	SearchThreads SearchThreadsCmd `cmd:"" name:"search_threads" help:"Search thread titles."`
+	SearchPosts SearchPostsCmd `cmd:"" name:"search_posts" help:"Search post contents."`
 	ReadProfile ReadProfileCmd `cmd:"" name:"read_profile" help:"Read a public user profile."`
 	ListUserPosts ListUserPostsCmd `cmd:"" name:"list_user_posts" help:"List a user's public posts."`
 	ListUserThreads ListUserThreadsCmd `cmd:"" name:"list_user_threads" help:"List threads started by a user."`
@@ -31,6 +33,7 @@ type CLI struct {
 	ListThreadsIParticipated ListThreadsIParticipatedCmd `cmd:"" name:"list_threads_i_participated" help:"List threads with posts by the authenticated user."`
 	FollowLink FollowLinkCmd `cmd:"" name:"follow_link" help:"Resolve and normalize an internal forum link."`
 	GetImage GetImageCmd `cmd:"" name:"get_image" help:"Resolve image and attachment URLs."`
+	MCP MCPCommand `cmd:"" name:"mcp" help:"Run the MCP server over stdin/stdout."`
 }
 
 type App struct {
@@ -43,10 +46,19 @@ type App struct {
 
 func Execute() error {
 	cli := CLI{}
-	parser := kong.Parse(&cli,
+	parser := kong.Must(&cli,
 		kong.Name("xf-cli"),
 		kong.Description("Read-only XenForo frontend client and future MCP tool backend."),
 	)
+
+	ctx, err := parser.Parse(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(parser.Stderr, "Error: %v\n\n", err)
+		if parseErr, ok := err.(*kong.ParseError); ok {
+			_ = parseErr.Context.PrintUsage(false)
+		}
+		return err
+	}
 
 	app := &App{
 		baseURL:  cli.BaseURL,
@@ -56,7 +68,17 @@ func Execute() error {
 		asJSON:   cli.AsJSON,
 	}
 
-	return parser.Run(app)
+	if err := ctx.Run(app); err != nil {
+		if _, ok := err.(*kong.ParseError); ok {
+			fmt.Fprintf(parser.Stderr, "Error: %v\n\n", err)
+			_ = ctx.PrintUsage(false)
+			return err
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func truncate(text string, limit int) string {
@@ -127,6 +149,31 @@ func (a *App) login() (*auth.Client, auth.SessionInfo, error) {
 	}
 
 	return client, session, nil
+}
+
+func (a *App) mcpConfig() (xfmcp.Config, error) {
+	username := a.username
+	if username == "" {
+		username = strings.TrimSpace(os.Getenv("XF_USERNAME"))
+	}
+
+	password := a.password
+	if password == "" {
+		password = strings.TrimSpace(os.Getenv("XF_PASSWORD"))
+	}
+
+	cfg := xfmcp.Config{
+		BaseURL:  a.baseURL,
+		Username: username,
+		Password: password,
+		Verbose:  a.verbose,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return xfmcp.Config{}, err
+	}
+
+	return cfg, nil
 }
 
 func (a *App) printSession(session auth.SessionInfo) error {

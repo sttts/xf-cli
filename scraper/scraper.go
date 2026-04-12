@@ -82,11 +82,19 @@ type SearchResultItem struct {
 type SearchResult struct {
 	Username    string             `json:"username"`
 	BaseURL     string             `json:"base_url"`
+	SearchType  string             `json:"search_type"`
 	Query       string             `json:"query"`
 	Page        int                `json:"page"`
 	Results     []SearchResultItem `json:"results"`
 	NextPageURL string             `json:"next_page_url,omitempty"`
 }
+
+type SearchMode string
+
+const (
+	SearchModeThreads SearchMode = "threads"
+	SearchModePosts   SearchMode = "posts"
+)
 
 func ListForums(client *auth.Client, session auth.SessionInfo) (ForumListResult, error) {
 	body, err := client.FetchPage(client.BaseURL() + "/forums/")
@@ -167,7 +175,15 @@ func ReadThread(client *auth.Client, session auth.SessionInfo, threadRef string)
 	}, nil
 }
 
-func Search(client *auth.Client, session auth.SessionInfo, query string, page int) (SearchResult, error) {
+func SearchThreads(client *auth.Client, session auth.SessionInfo, query string, page int) (SearchResult, error) {
+	return search(client, session, query, page, SearchModeThreads)
+}
+
+func SearchPosts(client *auth.Client, session auth.SessionInfo, query string, page int) (SearchResult, error) {
+	return search(client, session, query, page, SearchModePosts)
+}
+
+func search(client *auth.Client, session auth.SessionInfo, query string, page int, mode SearchMode) (SearchResult, error) {
 	page = normalizePage(page)
 	searchPageURL := client.BaseURL() + "/search/"
 	searchPageBody, err := client.FetchPage(searchPageURL)
@@ -183,6 +199,14 @@ func Search(client *auth.Client, session auth.SessionInfo, query string, page in
 	form := url.Values{
 		"keywords": {query},
 		"_xfToken": {token},
+	}
+	switch mode {
+	case SearchModeThreads:
+		form.Set("c[title_only]", "1")
+	case SearchModePosts:
+		form.Set("search_type", "post")
+	default:
+		return SearchResult{}, fmt.Errorf("unsupported search mode %q", mode)
 	}
 
 	searchBody, err := client.PostForm(client.BaseURL()+"/search/search", form, searchPageURL)
@@ -209,6 +233,7 @@ func Search(client *auth.Client, session auth.SessionInfo, query string, page in
 
 	result.Username = session.Username
 	result.BaseURL = session.BaseURL
+	result.SearchType = string(mode)
 	return result, nil
 }
 

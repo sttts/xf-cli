@@ -109,14 +109,31 @@ func TestLiveReadThread(t *testing.T) {
 	}
 }
 
-func TestLiveSearch(t *testing.T) {
+func TestLiveSearchThreads(t *testing.T) {
 	client, session := newLiveSession(t)
-	result, err := scraper.Search(client, session, "segler", 1)
+	result, err := scraper.SearchThreads(client, session, "segler", 1)
 	if err != nil {
-		t.Fatalf("search: %v", err)
+		t.Fatalf("search threads: %v", err)
 	}
 	if len(result.Results) == 0 {
-		t.Fatal("expected search results")
+		t.Fatal("expected thread search results")
+	}
+	if result.SearchType != string(scraper.SearchModeThreads) {
+		t.Fatalf("expected thread search type, got %q", result.SearchType)
+	}
+}
+
+func TestLiveSearchPosts(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.SearchPosts(client, session, "segler", 1)
+	if err != nil {
+		t.Fatalf("search posts: %v", err)
+	}
+	if len(result.Results) == 0 {
+		t.Fatal("expected post search results")
+	}
+	if result.SearchType != string(scraper.SearchModePosts) {
+		t.Fatalf("expected post search type, got %q", result.SearchType)
 	}
 }
 

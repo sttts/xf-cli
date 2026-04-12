@@ -3,21 +3,35 @@ package cmds
 import (
 	"fmt"
 
+	"github.com/sttts/xf-cli/auth"
 	"github.com/sttts/xf-cli/scraper"
 )
 
-type SearchCmd struct {
+type SearchThreadsCmd struct {
 	Query string `arg:"" required:"" help:"Search query."`
 	Page  int    `default:"1" help:"Page number."`
 }
 
-func (cmd *SearchCmd) Run(app *App) error {
+func (cmd *SearchThreadsCmd) Run(app *App) error {
+	return runSearch(app, cmd.Query, cmd.Page, scraper.SearchThreads)
+}
+
+type SearchPostsCmd struct {
+	Query string `arg:"" required:"" help:"Search query."`
+	Page  int    `default:"1" help:"Page number."`
+}
+
+func (cmd *SearchPostsCmd) Run(app *App) error {
+	return runSearch(app, cmd.Query, cmd.Page, scraper.SearchPosts)
+}
+
+func runSearch(app *App, query string, page int, searchFunc func(client *auth.Client, session auth.SessionInfo, query string, page int) (scraper.SearchResult, error)) error {
 	client, session, err := app.login()
 	if err != nil {
 		return err
 	}
 
-	result, err := scraper.Search(client, session, cmd.Query, cmd.Page)
+	result, err := searchFunc(client, session, query, page)
 	if err != nil {
 		return err
 	}
@@ -27,6 +41,7 @@ func (cmd *SearchCmd) Run(app *App) error {
 	}
 
 	fmt.Printf("Logged in as: %s\n", result.Username)
+	fmt.Printf("Search type: %s\n", result.SearchType)
 	fmt.Printf("Search query: %s\n", result.Query)
 	fmt.Printf("Results: %d\n", len(result.Results))
 	for _, item := range result.Results {

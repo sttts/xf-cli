@@ -23,7 +23,8 @@ The PoC in [`main.go`](./main.go) has already validated these assumptions agains
 - forum thread list scraping works
 - full thread reading across all pages works
 - image extraction from posts works
-- search works
+- `search_threads` works
+- `search_posts` works
 
 This means the project direction is confirmed:
 - use frontend HTML, not XenForo REST API
@@ -181,18 +182,17 @@ Important:
 - this tool must follow XenForo pagination until the complete thread has been collected
 - partial page reads are not sufficient for the intended LLM use case
 
-### `search`
+### `search_threads`
 
 Purpose:
-- search the forum as the authenticated user
+- search thread titles as the authenticated user
 
 Input:
 - `query`
 - optional `page`
-- optional `title_only`
-- optional `author`
 
 Output:
+- `search_type=threads`
 - query
 - current page
 - search results
@@ -202,9 +202,39 @@ Each result should include:
 - title
 - canonical URL
 - snippet
-- optional result type when distinguishable
 
 Current implemented result fields:
+- `search_type`
+- `query`
+- `page`
+- `results[].title`
+- `results[].url`
+- `results[].snippet`
+- `next_page_url`
+
+### `search_posts`
+
+Purpose:
+- search post contents as the authenticated user
+
+Input:
+- `query`
+- optional `page`
+
+Output:
+- `search_type=posts`
+- query
+- current page
+- search results
+- next-page URL if available
+
+Each result should include:
+- title
+- canonical URL
+- snippet
+
+Current implemented result fields:
+- `search_type`
 - `query`
 - `page`
 - `results[].title`
@@ -657,7 +687,7 @@ Risk:
 - search flow differs between quick search and advanced search
 
 Mitigation:
-- drive search through the real frontend search form flow
+- drive `search_threads` and `search_posts` through the real frontend search form flow
 - cover the result parsing with fixtures from `rc-network.de`
 
 ### Large threads
@@ -721,7 +751,8 @@ The PoC already proved the core viability:
 - frontend scraping works
 - full thread traversal works
 - images can be extracted
-- search works
+- `search_threads` works
+- `search_posts` works
 - REST API without `XF-Api-Key` is not usable for this project
 
 The next correct move is not more PoC expansion in `main.go`.
