@@ -156,7 +156,7 @@ xf-cli get_image /attachments/piper-tc-jpg.9277151/
 ### Logical paging
 
 List and search commands use logical paging:
-- `--limit=100` is the CLI default
+- `--limit=50` is the CLI default
 - `--limit=0` means: collect all pages
 - if `--page` is unset, pages are collected until at least `limit` results are present
 - responses include `next_page` and `next_page_url`

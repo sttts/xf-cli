@@ -8,7 +8,7 @@ import (
 
 type ListMyThreadsCmd struct {
 	Page  string `help:"Page cursor returned by a previous call."`
-	Limit int    `default:"100" help:"Minimum number of threads to collect; 0 means all pages."`
+	Limit int    `default:"50" help:"Minimum number of threads to collect; 0 means all pages."`
 }
 
 func (cmd *ListMyThreadsCmd) Run(app *App) error {

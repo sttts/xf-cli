@@ -10,7 +10,7 @@ import (
 type SearchThreadsCmd struct {
 	Query string `arg:"" required:"" help:"Search query."`
 	Page  string `help:"Page cursor returned by a previous call."`
-	Limit int    `default:"100" help:"Minimum number of results to collect; 0 means all pages."`
+	Limit int    `default:"50" help:"Minimum number of results to collect; 0 means all pages."`
 }
 
 func (cmd *SearchThreadsCmd) Run(app *App) error {
@@ -20,7 +20,7 @@ func (cmd *SearchThreadsCmd) Run(app *App) error {
 type SearchPostsCmd struct {
 	Query string `arg:"" required:"" help:"Search query."`
 	Page  string `help:"Page cursor returned by a previous call."`
-	Limit int    `default:"100" help:"Minimum number of results to collect; 0 means all pages."`
+	Limit int    `default:"50" help:"Minimum number of results to collect; 0 means all pages."`
 }
 
 func (cmd *SearchPostsCmd) Run(app *App) error {

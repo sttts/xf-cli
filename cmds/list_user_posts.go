@@ -9,7 +9,7 @@ import (
 type ListUserPostsCmd struct {
 	UserURL string `arg:"" required:"" help:"User profile URL or path."`
 	Page    string `help:"Page cursor returned by a previous call."`
-	Limit   int    `default:"100" help:"Minimum number of posts to collect; 0 means all pages."`
+	Limit   int    `default:"50" help:"Minimum number of posts to collect; 0 means all pages."`
 }
 
 func (cmd *ListUserPostsCmd) Run(app *App) error {

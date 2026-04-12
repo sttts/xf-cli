@@ -65,7 +65,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_threads",
-				"List threads for a forum page.",
+				"List threads for a forum using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[ListThreadsArgs](),
 				mcpapi.WithOutputSchema[scraper.ThreadListResult](),
 			),
@@ -78,7 +78,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_new_posts",
-				"List new posts visible to the authenticated user.",
+				"List new posts visible to the authenticated user using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[PageArgs](),
 				mcpapi.WithOutputSchema[scraper.ThreadListResult](),
 			),
@@ -104,7 +104,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"search_threads",
-				"Search thread titles as the authenticated user.",
+				"Search thread titles and return paged thread-match results. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[SearchArgs](),
 				mcpapi.WithOutputSchema[scraper.SearchResult](),
 			),
@@ -117,7 +117,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"search_posts",
-				"Search post contents as the authenticated user.",
+				"Search post contents and return snippet-level matches with cursor-based paging. Use read_thread on the matched thread URL for full context. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[SearchArgs](),
 				mcpapi.WithOutputSchema[scraper.SearchResult](),
 			),
@@ -143,7 +143,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_user_posts",
-				"List recent public posts for a specific forum user.",
+				"List recent public posts for a specific forum user using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[ProfileArgs](),
 				mcpapi.WithOutputSchema[scraper.UserPostsResult](),
 			),
@@ -156,7 +156,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_user_threads",
-				"List threads started by a specific forum user.",
+				"List threads started by a specific forum user using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[ProfileArgs](),
 				mcpapi.WithOutputSchema[scraper.UserThreadsResult](),
 			),
@@ -169,7 +169,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_my_threads",
-				"List threads started by the authenticated user.",
+				"List threads started by the authenticated user using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[PageArgs](),
 				mcpapi.WithOutputSchema[scraper.ThreadListResult](),
 			),
@@ -182,7 +182,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"list_threads_i_participated",
-				"List threads where the authenticated user has posted.",
+				"List threads where the authenticated user has posted using cursor-based paging. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[PageArgs](),
 				mcpapi.WithOutputSchema[scraper.ThreadListResult](),
 			),
