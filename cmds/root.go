@@ -29,6 +29,7 @@ type CLI struct {
 	ListUserThreads ListUserThreadsCmd `cmd:"" name:"list_user_threads" help:"List threads started by a user."`
 	ListMyThreads ListMyThreadsCmd `cmd:"" name:"list_my_threads" help:"List threads started by the authenticated user."`
 	ListThreadsIParticipated ListThreadsIParticipatedCmd `cmd:"" name:"list_threads_i_participated" help:"List threads with posts by the authenticated user."`
+	FollowLink FollowLinkCmd `cmd:"" name:"follow_link" help:"Resolve and normalize an internal forum link."`
 }
 
 type App struct {

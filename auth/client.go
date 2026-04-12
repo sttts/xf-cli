@@ -252,6 +252,33 @@ func (c *Client) PostForm(requestURL string, form url.Values, referer string) ([
 	return body, nil
 }
 
+func (c *Client) HeadNoRedirect(requestURL string) (*http.Response, error) {
+	c.logRequest("HEAD", requestURL, nil)
+	c.waitTurn()
+
+	req, err := c.newRequest(http.MethodHead, requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating HEAD request: %w", err)
+	}
+
+	noRedirectClient := *c.httpClient
+	noRedirectClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	resp, err := noRedirectClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	c.logf("Status: %s", resp.Status)
+	for key, values := range resp.Header {
+		c.logf("  %s: %s", key, strings.Join(values, ", "))
+	}
+
+	return resp, nil
+}
+
 func (c *Client) ResolveURL(href string) string {
 	if href == "" {
 		return ""

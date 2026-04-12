@@ -246,3 +246,62 @@ func TestLiveListThreadsIParticipated(t *testing.T) {
 		t.Fatal("expected participated threads")
 	}
 }
+
+func TestLiveFollowLinkForum(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.FollowLink(client, session, "/forums/flugmodellbau-allgemein.31/")
+	if err != nil {
+		t.Fatalf("follow forum link: %v", err)
+	}
+	if result.Type != scraper.LinkTypeForum {
+		t.Fatalf("expected forum type, got %s", result.Type)
+	}
+	if result.ForumURL == "" {
+		t.Fatal("expected canonical forum url")
+	}
+}
+
+func TestLiveFollowLinkThreadUnread(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.FollowLink(client, session, "/threads/eure-sch%C3%B6nsten-modelle.144946/unread")
+	if err != nil {
+		t.Fatalf("follow unread link: %v", err)
+	}
+	if result.Type != scraper.LinkTypeThread {
+		t.Fatalf("expected thread type, got %s", result.Type)
+	}
+	if result.ThreadURL == "" || strings.Contains(result.ThreadURL, "/unread") {
+		t.Fatalf("expected canonical thread url, got %q", result.ThreadURL)
+	}
+}
+
+func TestLiveFollowLinkThreadLatest(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.FollowLink(client, session, "/threads/eure-sch%C3%B6nsten-modelle.144946/latest")
+	if err != nil {
+		t.Fatalf("follow latest link: %v", err)
+	}
+	if result.Type != scraper.LinkTypePost {
+		t.Fatalf("expected post type, got %s", result.Type)
+	}
+	if result.PostURL == "" || !strings.Contains(result.PostURL, "#post-") && !strings.Contains(result.ResolvedURL, "#post-") {
+		t.Fatalf("expected resolved post link, got post=%q resolved=%q", result.PostURL, result.ResolvedURL)
+	}
+}
+
+func TestLiveFollowLinkAttachment(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.FollowLink(client, session, "/attachments/piper-tc-jpg.9277151/")
+	if err != nil {
+		t.Fatalf("follow attachment link: %v", err)
+	}
+	if result.Type != scraper.LinkTypeAttachment {
+		t.Fatalf("expected attachment type, got %s", result.Type)
+	}
+	if result.AttachmentURL == "" {
+		t.Fatal("expected attachment url")
+	}
+	if result.ImageURL == "" {
+		t.Fatal("expected image url from attachment")
+	}
+}
