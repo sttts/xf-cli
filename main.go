@@ -17,12 +17,16 @@ import (
 )
 
 var (
-	baseURL    = flag.String("base-url", "https://www.rc-network.de", "Forum base URL")
-	username   = flag.String("u", "", "Forum username or email")
-	password   = flag.String("p", "", "Forum password (omit for secure prompt)")
-	verbose    = flag.Bool("v", false, "Verbose logging of HTTP request/response")
-	asJSON     = flag.Bool("json", false, "Output session info as JSON")
-	listForums = flag.Bool("list-forums", false, "List forum categories and subforums after login")
+	baseURL     = flag.String("base-url", "https://www.rc-network.de", "Forum base URL")
+	username    = flag.String("u", "", "Forum username or email")
+	password    = flag.String("p", "", "Forum password (omit for secure prompt)")
+	verbose     = flag.Bool("v", false, "Verbose logging of HTTP request/response")
+	asJSON      = flag.Bool("json", false, "Output session info as JSON")
+	listForums  = flag.Bool("list-forums", false, "List forum categories and subforums after login")
+	listThreads = flag.String("list-threads", "", "List threads for the given forum URL or path after login")
+	readThread  = flag.String("read-thread", "", "Read all posts from the given thread URL or path after login")
+	searchQuery = flag.String("search", "", "Search the forum for the given keywords after login")
+	forumPage   = flag.Int("page", 1, "Page number for list-threads or search")
 )
 
 func logf(format string, a ...any) {
@@ -173,6 +177,67 @@ type ForumListResult struct {
 	Categories []ForumCategory `json:"categories"`
 }
 
+type ThreadSummary struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Author      string `json:"author,omitempty"`
+	StartedAt   string `json:"started_at,omitempty"`
+	Replies     string `json:"replies,omitempty"`
+	Views       string `json:"views,omitempty"`
+	LastPostAt  string `json:"last_post_at,omitempty"`
+	LastPoster  string `json:"last_poster,omitempty"`
+}
+
+type ThreadListResult struct {
+	Username    string          `json:"username"`
+	BaseURL     string          `json:"base_url"`
+	ForumTitle  string          `json:"forum_title"`
+	ForumURL    string          `json:"forum_url"`
+	Page        int             `json:"page"`
+	Threads     []ThreadSummary `json:"threads"`
+	NextPageURL string          `json:"next_page_url,omitempty"`
+}
+
+type PostImage struct {
+	URL           string `json:"url"`
+	PreviewURL    string `json:"preview_url,omitempty"`
+	Alt           string `json:"alt,omitempty"`
+	AttachmentURL string `json:"attachment_url,omitempty"`
+}
+
+type ThreadPost struct {
+	PostNumber string      `json:"post_number,omitempty"`
+	PostURL    string      `json:"post_url,omitempty"`
+	Author     string      `json:"author"`
+	PostedAt   string      `json:"posted_at,omitempty"`
+	Content    string      `json:"content"`
+	Images     []PostImage `json:"images,omitempty"`
+}
+
+type ThreadReadResult struct {
+	Username  string       `json:"username"`
+	BaseURL   string       `json:"base_url"`
+	ThreadURL string       `json:"thread_url"`
+	Title     string       `json:"title"`
+	Posts     []ThreadPost `json:"posts"`
+	PagesRead int          `json:"pages_read"`
+}
+
+type SearchResultItem struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
+type SearchResult struct {
+	Username    string             `json:"username"`
+	BaseURL     string             `json:"base_url"`
+	Query       string             `json:"query"`
+	Page        int                `json:"page"`
+	Results     []SearchResultItem `json:"results"`
+	NextPageURL string             `json:"next_page_url,omitempty"`
+}
+
 func newRequest(method, requestURL string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, requestURL, body)
 	if err != nil {
@@ -209,6 +274,36 @@ func fetchPage(client *http.Client, requestURL string) ([]byte, error) {
 	return body, nil
 }
 
+func postForm(client *http.Client, requestURL string, form url.Values, referer string) ([]byte, error) {
+	logRequest("POST", requestURL, form)
+
+	req, err := newRequest(http.MethodPost, requestURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("creating POST request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", strings.TrimRight(*baseURL, "/"))
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	logResponse(resp, body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s returned %s", requestURL, resp.Status)
+	}
+
+	return body, nil
+}
+
 func absoluteURL(base, href string) string {
 	if href == "" {
 		return ""
@@ -225,6 +320,44 @@ func absoluteURL(base, href string) string {
 	}
 
 	return baseURL.ResolveReference(refURL).String()
+}
+
+func forumURL(base, forumRef string, page int) string {
+	u := absoluteURL(base, forumRef)
+	if page <= 1 {
+		return u
+	}
+
+	return strings.TrimRight(u, "/") + fmt.Sprintf("/page-%d", page)
+}
+
+func threadURL(base, threadRef string, page int) string {
+	u := absoluteURL(base, threadRef)
+	if page <= 1 {
+		return u
+	}
+
+	return strings.TrimRight(u, "/") + fmt.Sprintf("/page-%d", page)
+}
+
+func cleanText(text string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+}
+
+func extractTitle(doc *goquery.Document) string {
+	return cleanText(doc.Find(".p-title-value").First().Text())
+}
+
+func nextPageURL(base string, doc *goquery.Document) string {
+	if href, ok := doc.Find(".pageNav-jump--next").First().Attr("href"); ok && href != "" {
+		return absoluteURL(base, href)
+	}
+
+	if href, ok := doc.Find(".pageNavSimple-el--next").First().Attr("href"); ok && href != "" {
+		return absoluteURL(base, href)
+	}
+
+	return ""
 }
 
 func parseForumList(base string, body []byte) ([]ForumCategory, error) {
@@ -267,6 +400,154 @@ func parseForumList(base string, body []byte) ([]ForumCategory, error) {
 	})
 
 	return categories, nil
+}
+
+func parseThreadList(base string, body []byte, page int) (ThreadListResult, error) {
+	doc, err := parseDocument(body)
+	if err != nil {
+		return ThreadListResult{}, err
+	}
+
+	result := ThreadListResult{
+		ForumTitle:  extractTitle(doc),
+		ForumURL:    "",
+		Page:        page,
+		Threads:     make([]ThreadSummary, 0),
+		NextPageURL: nextPageURL(base, doc),
+	}
+
+	doc.Find(".structItem--thread").Each(func(_ int, item *goquery.Selection) {
+		titleLink := item.Find(".structItem-title a").First()
+		title := cleanText(titleLink.Text())
+		if title == "" {
+			return
+		}
+
+		thread := ThreadSummary{
+			Title: title,
+			URL:   absoluteURL(base, attrOrEmpty(titleLink, "href")),
+		}
+
+		thread.Author = cleanText(item.Find(".structItem-minor .username").First().Text())
+		thread.StartedAt = cleanText(item.Find(".structItem-startDate time").First().AttrOr("title", item.Find(".structItem-startDate time").First().Text()))
+		thread.Replies = cleanText(item.Find(".structItem-cell--meta dd").First().Text())
+		thread.Views = cleanText(item.Find(".structItem-cell--meta .structItem-minor dd").First().Text())
+		thread.LastPostAt = cleanText(item.Find(".structItem-cell--latest time").First().AttrOr("title", item.Find(".structItem-cell--latest time").First().Text()))
+		thread.LastPoster = cleanText(item.Find(".structItem-cell--latest .username").First().Text())
+		result.Threads = append(result.Threads, thread)
+	})
+
+	return result, nil
+}
+
+func attrOrEmpty(sel *goquery.Selection, attr string) string {
+	value, _ := sel.Attr(attr)
+	return value
+}
+
+func extractPostImages(base string, post *goquery.Selection) []PostImage {
+	images := make([]PostImage, 0)
+	seen := make(map[string]struct{})
+
+	post.Find(".message-userContent img").Each(func(_ int, imgSel *goquery.Selection) {
+		className := imgSel.AttrOr("class", "")
+		if strings.Contains(className, "smilie") || strings.Contains(className, "avatar") || strings.Contains(className, "reaction-image") {
+			return
+		}
+
+		src := absoluteURL(base, attrOrEmpty(imgSel, "src"))
+		if src == "" {
+			return
+		}
+
+		if _, ok := seen[src]; ok {
+			return
+		}
+		seen[src] = struct{}{}
+
+		image := PostImage{
+			URL:        src,
+			PreviewURL: src,
+			Alt:        cleanText(imgSel.AttrOr("alt", "")),
+		}
+
+		if link := imgSel.ParentFiltered("a"); link.Length() > 0 {
+			image.AttachmentURL = absoluteURL(base, attrOrEmpty(link, "href"))
+		} else if wrapper := imgSel.ParentsFiltered("a").First(); wrapper.Length() > 0 {
+			image.AttachmentURL = absoluteURL(base, attrOrEmpty(wrapper, "href"))
+		}
+
+		images = append(images, image)
+	})
+
+	return images
+}
+
+func parseThreadPosts(base string, body []byte) (string, []ThreadPost, string, error) {
+	doc, err := parseDocument(body)
+	if err != nil {
+		return "", nil, "", err
+	}
+
+	title := extractTitle(doc)
+	next := nextPageURL(base, doc)
+	posts := make([]ThreadPost, 0)
+
+	doc.Find("article.message--post").Each(func(_ int, postSel *goquery.Selection) {
+		post := ThreadPost{
+			Author: cleanText(postSel.Find(".message-name .username").First().Text()),
+		}
+
+		if content := strings.TrimSpace(postSel.Find(".message-body .bbWrapper").First().Text()); content != "" {
+			post.Content = content
+		} else {
+			post.Content = strings.TrimSpace(postSel.Find(".message-body").First().Text())
+		}
+
+		post.PostedAt = cleanText(postSel.Find(".message-attribution-main time").First().AttrOr("title", postSel.Find(".message-attribution-main time").First().Text()))
+
+		postNumberLink := postSel.Find(".message-attribution-opposite a").Last()
+		post.PostNumber = cleanText(postNumberLink.Text())
+		post.PostURL = absoluteURL(base, attrOrEmpty(postNumberLink, "href"))
+		post.Images = extractPostImages(base, postSel)
+
+		if post.Author != "" {
+			posts = append(posts, post)
+		}
+	})
+
+	return title, posts, next, nil
+}
+
+func parseSearchResults(base string, body []byte, query string, page int) (SearchResult, error) {
+	doc, err := parseDocument(body)
+	if err != nil {
+		return SearchResult{}, err
+	}
+
+	result := SearchResult{
+		Query:       query,
+		Page:        page,
+		Results:     make([]SearchResultItem, 0),
+		NextPageURL: nextPageURL(base, doc),
+	}
+
+	doc.Find(".contentRow").Each(func(_ int, row *goquery.Selection) {
+		titleLink := row.Find(".contentRow-title a").First()
+		title := cleanText(titleLink.Text())
+		if title == "" {
+			return
+		}
+
+		item := SearchResultItem{
+			Title:   title,
+			URL:     absoluteURL(base, attrOrEmpty(titleLink, "href")),
+			Snippet: cleanText(row.Find(".contentRow-snippet").First().Text()),
+		}
+		result.Results = append(result.Results, item)
+	})
+
+	return result, nil
 }
 
 func run() error {
@@ -365,6 +646,11 @@ func run() error {
 		BaseURL:  base,
 	}
 
+	page := *forumPage
+	if page < 1 {
+		page = 1
+	}
+
 	if *listForums {
 		forumsBody, err := fetchPage(client, base+"/forums/")
 		if err != nil {
@@ -395,6 +681,173 @@ func run() error {
 			for _, forum := range category.Forums {
 				fmt.Printf("  - %s\n", forum.Title)
 			}
+		}
+
+		return nil
+	}
+
+	if *listThreads != "" {
+		forumRef := forumURL(base, *listThreads, page)
+		threadsBody, err := fetchPage(client, forumRef)
+		if err != nil {
+			return fmt.Errorf("fetching thread list: %w", err)
+		}
+
+		result, err := parseThreadList(base, threadsBody, page)
+		if err != nil {
+			return fmt.Errorf("parsing thread list: %w", err)
+		}
+		result.Username = info.Username
+		result.BaseURL = info.BaseURL
+		result.ForumURL = forumRef
+
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(result)
+		}
+
+		fmt.Printf("Logged in as: %s\n", result.Username)
+		fmt.Printf("Forum: %s\n", result.ForumTitle)
+		fmt.Printf("Threads on page %d: %d\n", result.Page, len(result.Threads))
+		for _, thread := range result.Threads {
+			fmt.Printf("\n- %s\n", thread.Title)
+			fmt.Printf("  %s\n", thread.URL)
+			if thread.Author != "" {
+				fmt.Printf("  by %s\n", thread.Author)
+			}
+		}
+		if result.NextPageURL != "" {
+			fmt.Printf("\nNext page: %s\n", result.NextPageURL)
+		}
+
+		return nil
+	}
+
+	if *readThread != "" {
+		currentURL := threadURL(base, *readThread, 1)
+		seen := make(map[string]struct{})
+		posts := make([]ThreadPost, 0)
+		title := ""
+		pagesRead := 0
+
+		for currentURL != "" {
+			if _, ok := seen[currentURL]; ok {
+				break
+			}
+			seen[currentURL] = struct{}{}
+
+			threadBody, err := fetchPage(client, currentURL)
+			if err != nil {
+				return fmt.Errorf("fetching thread page %s: %w", currentURL, err)
+			}
+
+			pageTitle, pagePosts, nextURL, err := parseThreadPosts(base, threadBody)
+			if err != nil {
+				return fmt.Errorf("parsing thread page %s: %w", currentURL, err)
+			}
+
+			if title == "" {
+				title = pageTitle
+			}
+			posts = append(posts, pagePosts...)
+			pagesRead++
+			currentURL = nextURL
+		}
+
+		result := ThreadReadResult{
+			Username:  info.Username,
+			BaseURL:   info.BaseURL,
+			ThreadURL: absoluteURL(base, *readThread),
+			Title:     title,
+			Posts:     posts,
+			PagesRead: pagesRead,
+		}
+
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(result)
+		}
+
+		fmt.Printf("Logged in as: %s\n", result.Username)
+		fmt.Printf("Thread: %s\n", result.Title)
+		fmt.Printf("Pages read: %d\n", result.PagesRead)
+		fmt.Printf("Posts: %d\n", len(result.Posts))
+		for _, post := range result.Posts {
+			fmt.Printf("\n%s %s\n", post.PostNumber, post.Author)
+			if post.PostedAt != "" {
+				fmt.Printf("%s\n", post.PostedAt)
+			}
+			fmt.Printf("%s\n", truncate(post.Content, 300))
+			if len(post.Images) > 0 {
+				fmt.Printf("Images: %d\n", len(post.Images))
+			}
+		}
+
+		return nil
+	}
+
+	if *searchQuery != "" {
+		searchPageURL := base + "/search/"
+		searchPageBody, err := fetchPage(client, searchPageURL)
+		if err != nil {
+			return fmt.Errorf("fetching search page: %w", err)
+		}
+
+		token, err := extractCSRFToken(searchPageBody)
+		if err != nil {
+			return fmt.Errorf("extracting search token: %w", err)
+		}
+
+		form := url.Values{
+			"keywords": {*searchQuery},
+			"_xfToken": {token},
+		}
+
+		searchBody, err := postForm(client, base+"/search/search", form, searchPageURL)
+		if err != nil {
+			return fmt.Errorf("search request failed: %w", err)
+		}
+
+		result, err := parseSearchResults(base, searchBody, *searchQuery, 1)
+		if err != nil {
+			return fmt.Errorf("parsing search results: %w", err)
+		}
+
+		for currentPage := 1; currentPage < page && result.NextPageURL != ""; currentPage++ {
+			searchBody, err = fetchPage(client, result.NextPageURL)
+			if err != nil {
+				return fmt.Errorf("fetching search page %d: %w", currentPage+1, err)
+			}
+
+			result, err = parseSearchResults(base, searchBody, *searchQuery, currentPage+1)
+			if err != nil {
+				return fmt.Errorf("parsing search page %d: %w", currentPage+1, err)
+			}
+		}
+
+		result.Username = info.Username
+		result.BaseURL = info.BaseURL
+
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(result)
+		}
+
+		fmt.Printf("Logged in as: %s\n", result.Username)
+		fmt.Printf("Search query: %s\n", result.Query)
+		fmt.Printf("Results: %d\n", len(result.Results))
+		for _, item := range result.Results {
+			fmt.Printf("\n- %s\n", item.Title)
+			fmt.Printf("  %s\n", item.URL)
+			if item.Snippet != "" {
+				fmt.Printf("  %s\n", truncate(item.Snippet, 180))
+			}
+		}
+		if result.NextPageURL != "" {
+			fmt.Printf("\nNext page: %s\n", result.NextPageURL)
 		}
 
 		return nil
