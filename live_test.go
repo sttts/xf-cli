@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sttts/xf-mcp/auth"
@@ -90,6 +91,22 @@ func TestLiveReadThread(t *testing.T) {
 	if len(result.Posts) == 0 {
 		t.Fatal("expected posts")
 	}
+
+	foundImage := false
+	for _, post := range result.Posts {
+		for _, image := range post.Images {
+			if image.URL != "" {
+				foundImage = true
+				break
+			}
+		}
+		if foundImage {
+			break
+		}
+	}
+	if !foundImage {
+		t.Fatal("expected extracted images in thread")
+	}
 }
 
 func TestLiveSearch(t *testing.T) {
@@ -100,5 +117,65 @@ func TestLiveSearch(t *testing.T) {
 	}
 	if len(result.Results) == 0 {
 		t.Fatal("expected search results")
+	}
+}
+
+func TestLiveProfilePage(t *testing.T) {
+	client, _ := newLiveSession(t)
+	body, err := client.FetchPage(client.BaseURL() + "/members/sttts.31018/")
+	if err != nil {
+		t.Fatalf("fetch profile page: %v", err)
+	}
+
+	page := string(body)
+	if !strings.Contains(page, "memberHeader-name") {
+		t.Fatal("expected member header on profile page")
+	}
+	if !strings.Contains(page, "/members/sttts.31018/recent-content") {
+		t.Fatal("expected recent-content link on profile page")
+	}
+}
+
+func TestLiveRecentContentPage(t *testing.T) {
+	client, _ := newLiveSession(t)
+	body, err := client.FetchPage(client.BaseURL() + "/members/sttts.31018/recent-content")
+	if err != nil {
+		t.Fatalf("fetch recent content page: %v", err)
+	}
+
+	page := string(body)
+	if !strings.Contains(page, "Aktueller Inhalt von sttts") {
+		t.Fatal("expected recent content title")
+	}
+	if !strings.Contains(page, "contentRow-title") {
+		t.Fatal("expected content rows on recent content page")
+	}
+}
+
+func TestLiveFindStartedThreads(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListThreads(client, session, "/find-threads/started", 1)
+	if err != nil {
+		t.Fatalf("list started threads: %v", err)
+	}
+	if !strings.Contains(result.ForumTitle, "Themen") {
+		t.Fatalf("expected started threads title, got %q", result.ForumTitle)
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected started threads")
+	}
+}
+
+func TestLiveFindContributedThreads(t *testing.T) {
+	client, session := newLiveSession(t)
+	result, err := scraper.ListThreads(client, session, "/find-threads/contributed", 1)
+	if err != nil {
+		t.Fatalf("list contributed threads: %v", err)
+	}
+	if !strings.Contains(result.ForumTitle, "Themen") {
+		t.Fatalf("expected contributed threads title, got %q", result.ForumTitle)
+	}
+	if len(result.Threads) == 0 {
+		t.Fatal("expected contributed threads")
 	}
 }
