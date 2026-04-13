@@ -117,7 +117,7 @@ func Tools(config Config) ([]server.ServerTool, error) {
 		{
 			Tool: readOnlyTool(
 				"search_posts",
-				"Search post contents and return snippet-level matches with cursor-based paging. Use read_thread on the matched thread URL for full context. Use page to continue from next_page and limit to cap how many results are collected.",
+				"Search post contents and return snippet-level matches with cursor-based paging. Returns only short snippets, not full post bodies. For anything relevant, call read_thread on the matched thread URL before relying on the result. Use page to continue from next_page and limit to cap how many results are collected.",
 				mcpapi.WithInputSchema[SearchArgs](),
 				mcpapi.WithOutputSchema[scraper.SearchResult](),
 			),
